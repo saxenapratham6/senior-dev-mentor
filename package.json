@@ -1,0 +1,184 @@
+{
+  "name": "senior-dev-mentor",
+  "displayName": "Senior Dev Mentor",
+  "description": "An open-source AI mentor that teaches you to code instead of coding for you. Socratic hints, code reviews that ask questions, algorithm visualizers, and a small panda that keeps you company.",
+  "version": "0.1.0",
+  "publisher": "senior-dev-mentor",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/saxenapratham6/senior-dev-mentor.git"
+  },
+  "engines": {
+    "vscode": "^1.100.0"
+  },
+  "categories": [
+    "Education",
+    "AI",
+    "Other"
+  ],
+  "keywords": [
+    "education",
+    "mentor",
+    "tutor",
+    "learning",
+    "algorithms",
+    "uiuc"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "viewsContainers": {
+      "secondarySidebar": [
+        {
+          "id": "seniorDevMentor",
+          "title": "Mentor",
+          "icon": "media/mentor-icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "seniorDevMentor": [
+        {
+          "type": "webview",
+          "id": "seniorDevMentor.view",
+          "name": "Senior Dev Mentor"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "seniorDevMentor.focus",
+        "title": "Open Mentor",
+        "category": "Mentor"
+      },
+      {
+        "command": "seniorDevMentor.review",
+        "title": "Review My Code (questions, not fixes)",
+        "category": "Mentor"
+      },
+      {
+        "command": "seniorDevMentor.hint",
+        "title": "I'm Stuck: Give Me a Hint",
+        "category": "Mentor"
+      },
+      {
+        "command": "seniorDevMentor.explainError",
+        "title": "Help Me Understand This Error",
+        "category": "Mentor"
+      },
+      {
+        "command": "seniorDevMentor.setApiKey",
+        "title": "Set Anthropic API Key",
+        "category": "Mentor"
+      },
+      {
+        "command": "seniorDevMentor.clearApiKey",
+        "title": "Remove Anthropic API Key",
+        "category": "Mentor"
+      },
+      {
+        "command": "seniorDevMentor.newProblem",
+        "title": "Start a New Problem (reset hints)",
+        "category": "Mentor"
+      }
+    ],
+    "menus": {
+      "editor/context": [
+        {
+          "command": "seniorDevMentor.review",
+          "group": "seniorDevMentor@1"
+        },
+        {
+          "command": "seniorDevMentor.hint",
+          "group": "seniorDevMentor@2"
+        },
+        {
+          "command": "seniorDevMentor.explainError",
+          "group": "seniorDevMentor@3"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "Senior Dev Mentor",
+      "properties": {
+        "seniorDevMentor.provider": {
+          "type": "string",
+          "enum": [
+            "anthropic",
+            "ollama"
+          ],
+          "enumDescriptions": [
+            "Claude through the Anthropic API (needs an API key).",
+            "A local model through Ollama: free and offline."
+          ],
+          "default": "anthropic",
+          "description": "Which AI model powers the mentor."
+        },
+        "seniorDevMentor.anthropicModel": {
+          "type": "string",
+          "default": "claude-opus-5-5",
+          "description": "Claude model ID to use when the provider is 'anthropic'."
+        },
+        "seniorDevMentor.effort": {
+          "type": "string",
+          "enum": [
+            "low",
+            "medium",
+            "high"
+          ],
+          "default": "medium",
+          "description": "How hard Claude thinks before answering. Lower is faster and cheaper."
+        },
+        "seniorDevMentor.ollamaModel": {
+          "type": "string",
+          "default": "llama3.2",
+          "description": "Ollama model name to use when the provider is 'ollama'."
+        },
+        "seniorDevMentor.ollamaUrl": {
+          "type": "string",
+          "default": "http://localhost:11434",
+          "description": "Base URL of your Ollama server."
+        },
+        "seniorDevMentor.maxCodeLines": {
+          "type": "number",
+          "default": 3,
+          "minimum": 0,
+          "maximum": 8,
+          "description": "Guardrail: the longest code example (in lines) the mentor may show. Longer code is hidden, whatever the model wrote."
+        },
+        "seniorDevMentor.nudgeOnSave": {
+          "type": "boolean",
+          "default": true,
+          "description": "When you save, the panda may ask one question about something it noticed in your code."
+        },
+        "seniorDevMentor.mascot": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show the animated panda mascot."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "build": "node esbuild.mjs",
+    "watch": "node esbuild.mjs --watch",
+    "typecheck": "tsc --noEmit",
+    "test": "node --import tsx --test test/*.test.ts",
+    "package": "npm run build && vsce package --no-dependencies"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.135.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/vscode": "^1.100.0",
+    "@vscode/codicons": "^0.0.46-24",
+    "@vscode/vsce": "^3.0.0",
+    "esbuild": "^0.25.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.0"
+  }
+}
