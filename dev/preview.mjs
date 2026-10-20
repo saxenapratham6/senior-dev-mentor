@@ -26,7 +26,7 @@ body { width: 360px; height: 720px; border-right: 1px solid #333; }`;
 
 const mock = `
 <script>
-const REPLY = "Nice start: your loop visits every element, and \`total\` starts at the right value.\\n\\nA few things to think about:\\n\\n- What does your function return when \`nums\` is empty?\\n- On line 4 you compare with \`>\`. What should happen when two values are **equal**?\\n\\nHere's the full fix:\\n\`\`\`python\\ndef best(nums):\\n    if not nums:\\n        return None\\n    m = nums[0]\\n    for n in nums:\\n        m = max(m, n)\\n    return m\\n\`\`\`\\n\\n> Try tracing \`[3, 3, 1]\` by hand before you change anything.\\n";
+const REPLY = "Nice start: your loop visits every element, and \`total\` starts at the right value.\\n\\nA few things to think about:\\n\\n- On [[L2]], what does your function return when \`nums\` is empty?\\n- On [[L4]] you compare with \`>\`. What should happen when two values are **equal**?\\n\\nHere's the full fix:\\n\`\`\`python\\ndef best(nums):\\n    if not nums:\\n        return None\\n    m = nums[0]\\n    for n in nums:\\n        m = max(m, n)\\n    return m\\n\`\`\`\\n\\n> Try tracing \`[3, 3, 1]\` by hand before you change anything.\\n";
 window.acquireVsCodeApi = () => {
   let state = {};
   const reply = (m) => window.postMessage(m, "*");
@@ -37,6 +37,17 @@ window.acquireVsCodeApi = () => {
       if (m.type === "ready") {
         reply({ type: "config", mascot: true, providerLabel: "Claude · claude-opus-5-5 (mock)", needsKey: false, maxCodeLines: 3 });
         reply({ type: "progress", streak: 3, data: { questions: 4, reviews: 3, hintsByLevel: [2, 1, 0], solutionRequestsRedirected: 1, codeHidden: 2, plansChecked: 2, quizzes: 1, predictionsRight: 7, predictionsTotal: 9, concepts: { "edge cases": 4, recursion: 2, "time complexity": 1 }, activeDays: [] } });
+      }
+      if (m.type === "visitLine") {
+        reply({ type: "pandaAway", fileName: "main.py", line: m.line, stop: 1, stops: 2 });
+        return;
+      }
+      if (m.type === "pandaDismiss") return reply({ type: "pandaBack" });
+      if (m.type === "visualize") {
+        reply({ type: "sceneLoading" });
+        // Stand-in for the model: an AI-style scene built from a built-in one.
+        setTimeout(() => reply({ type: "scene", scene: { ...window.ScenePlayer.EXAMPLES.bfs(), title: "(mock AI) " + m.prompt } }), 900);
+        return;
       }
       if (m.type === "ask") {
         reply({ type: "user", label: m.action === "chat" ? "" : m.action, text: m.text, fileName: "main.py" });

@@ -147,18 +147,84 @@
         Mascot.say("Fresh start! What are we working on?", 4000);
         break;
       case "nudge":
+        if (m.walked) break; // the panda is already at the line in the editor
         Mascot.setMood("alert");
         Mascot.say(
-          `<b>psst, about line ${m.line + 1} in ${esc(m.fileName)}:</b><br>${esc(m.question)}<div class="bubble-hint">Click to go to that line</div>`,
+          `<b>psst, about line ${m.line + 1} in ${esc(m.fileName)}:</b><br>${esc(m.question)}<div class="bubble-hint">Click and I'll walk you there</div>`,
           15000,
-          () => vscode.postMessage({ type: "goToLine", line: m.line }),
+          () => vscode.postMessage({ type: "visitLine", line: m.line + 1, note: m.question }),
         );
+        break;
+      case "pandaAway":
+        $("awayText").innerHTML = `<i class="codicon codicon-location"></i>In your editor at <b>line ${m.line}</b> of ${esc(m.fileName)}${m.stops > 1 ? ` (stop ${m.stop} of ${m.stops})` : ""}. Hover that line.`;
+        Mascot.leave(() => ($("awaySign").hidden = false));
+        break;
+      case "pandaBack":
+        $("awaySign").hidden = true;
+        Mascot.comeBack();
+        break;
+      case "sceneLoading":
+        sceneStatus('<i class="codicon codicon-loading codicon-modifier-spin"></i>Drawing it…');
+        $("vizGo").disabled = $("vizCode").disabled = true;
+        break;
+      case "scene":
+        sceneStatus(null);
+        $("vizGo").disabled = $("vizCode").disabled = false;
+        ScenePlayer.load(m.scene);
+        break;
+      case "sceneError":
+        $("vizGo").disabled = $("vizCode").disabled = false;
+        sceneStatus(`<i class="codicon codicon-warning"></i>${esc(m.message)}${m.action ? ` <button class="small" data-fix="${m.action}">${m.action === "setApiKey" ? "Add API key" : "Open settings"}</button>` : ""}`, true);
         break;
       case "progress":
         renderProgress(m.data, m.streak);
         break;
     }
   });
+
+  // ---------------------------------------------------------------- line chips
+  // "line 12" chips in replies send the panda to that line, carrying the bullet they sit in.
+  log.addEventListener("click", (e) => {
+    const chip = e.target.closest(".line-chip");
+    if (!chip) return;
+    const block = chip.closest("li, p, blockquote");
+    const note = block ? block.textContent.trim() : `Line ${chip.dataset.line}`;
+    vscode.postMessage({ type: "visitLine", line: Number(chip.dataset.line), note });
+  });
+  $("awayBack").addEventListener("click", () => vscode.postMessage({ type: "pandaDismiss" }));
+
+  // ---------------------------------------------------------------- visualize
+  document.querySelectorAll(".seg-btn").forEach((b) =>
+    b.addEventListener("click", () => {
+      document.querySelectorAll(".seg-btn").forEach((x) => x.classList.toggle("active", x === b));
+      document.querySelectorAll(".viz-pane").forEach((p) => p.classList.toggle("active", p.id === `viz-${b.dataset.viz}`));
+    }),
+  );
+  function sceneStatus(html, isError) {
+    const box = $("sceneStatus");
+    box.hidden = !html;
+    box.classList.toggle("error", !!isError);
+    box.innerHTML = html || "";
+    box.querySelector("[data-fix]")?.addEventListener("click", (e) => vscode.postMessage({ type: e.target.closest("[data-fix]").dataset.fix }));
+  }
+  $("vizGo").addEventListener("click", () => {
+    const prompt = $("vizPrompt").value.trim();
+    if (!prompt) return sceneStatus("Describe what you want to see, or try an example below.", true);
+    vscode.postMessage({ type: "visualize", prompt, useSelection: false });
+  });
+  $("vizCode").addEventListener("click", () => vscode.postMessage({ type: "visualize", prompt: $("vizPrompt").value.trim(), useSelection: true }));
+  $("vizPrompt").addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      $("vizGo").click();
+    }
+  });
+  document.querySelectorAll("[data-example]").forEach((b) =>
+    b.addEventListener("click", () => {
+      sceneStatus(null);
+      ScenePlayer.load(ScenePlayer.EXAMPLES[b.dataset.example]());
+    }),
+  );
 
   // ---------------------------------------------------------------- progress
   function renderProgress(p, streak) {
@@ -176,6 +242,7 @@
         <div class="stat"><div class="n">${p.plansChecked}</div><div class="l">plans checked</div></div>
         <div class="stat"><div class="n">${pct === null ? "–" : pct + "%"}</div><div class="l">predictions right (${p.predictionsTotal})</div></div>
         <div class="stat"><div class="n">${p.quizzes}</div><div class="l">quizzes</div></div>
+        <div class="stat"><div class="n">${p.visualizations || 0}</div><div class="l">things visualized</div></div>
       </div>
       <h4>Hints used</h4>
       <div class="muted small">Nudges ${p.hintsByLevel[0]} · Concepts ${p.hintsByLevel[1]} · Plans ${p.hintsByLevel[2]}</div>
@@ -195,6 +262,13 @@
       algo: $("algo"), size: $("size"), speed: $("speed"), predict: $("predict"),
       play: $("play"), step: $("step"), shuffle: $("shuffle"),
       canvas: $("canvas"), vizCaption: $("vizCaption"), predictBox: $("predictBox"), pseudo: $("pseudo"), vizStats: $("vizStats"),
+    },
+    { onPrediction: (right) => vscode.postMessage({ type: "prediction", right }) },
+  );
+  ScenePlayer.init(
+    {
+      stage: $("sceneStage"), svg: $("sceneSvg"), title: $("sceneTitle"), box: $("sceneBox"), caption: $("sceneCaption"),
+      predictBox: $("scenePredictBox"), predict: $("scenePredict"), prev: $("scenePrev"), play: $("scenePlay"), next: $("sceneNext"), counter: $("sceneCounter"),
     },
     { onPrediction: (right) => vscode.postMessage({ type: "prediction", right }) },
   );

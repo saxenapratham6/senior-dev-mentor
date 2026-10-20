@@ -1,8 +1,8 @@
 {
   "name": "senior-dev-mentor",
   "displayName": "Senior Dev Mentor",
-  "description": "An open-source AI mentor that teaches you to code instead of coding for you. Socratic hints, code reviews that ask questions, algorithm visualizers, and a small panda that keeps you company.",
-  "version": "0.1.0",
+  "description": "An open-source AI mentor that teaches you to code instead of coding for you. Socratic hints, code reviews that ask questions, visualizations of any data structure, and a panda that walks to the line you should look at.",
+  "version": "0.2.0",
   "publisher": "senior-dev-mentor",
   "license": "MIT",
   "repository": {
@@ -83,6 +83,21 @@
         "command": "seniorDevMentor.newProblem",
         "title": "Start a New Problem (reset hints)",
         "category": "Mentor"
+      },
+      {
+        "command": "seniorDevMentor.pandaNext",
+        "title": "Panda: Walk to the Next Stop",
+        "category": "Mentor"
+      },
+      {
+        "command": "seniorDevMentor.pandaDismiss",
+        "title": "Panda: Come Back to the Sidebar",
+        "category": "Mentor"
+      },
+      {
+        "command": "seniorDevMentor.pandaAsk",
+        "title": "Panda: Explain This Line More",
+        "category": "Mentor"
       }
     ],
     "menus": {
@@ -98,6 +113,12 @@
         {
           "command": "seniorDevMentor.explainError",
           "group": "seniorDevMentor@3"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "seniorDevMentor.pandaAsk",
+          "when": "false"
         }
       ]
     },
@@ -157,7 +178,12 @@
         "seniorDevMentor.mascot": {
           "type": "boolean",
           "default": true,
-          "description": "Show the animated panda mascot."
+          "description": "Show the animated panda mascot (in the sidebar and in the editor)."
+        },
+        "seniorDevMentor.editorPanda": {
+          "type": "boolean",
+          "default": true,
+          "description": "Let the panda walk into your editor to point at lines the mentor talks about. It only scrolls your editor when you asked for a review, hint or error explanation."
         }
       }
     }
@@ -167,15 +193,18 @@
     "watch": "node esbuild.mjs --watch",
     "typecheck": "tsc --noEmit",
     "test": "node --import tsx --test test/*.test.ts",
-    "package": "npm run build && vsce package --no-dependencies"
+    "package": "npm run build && vsce package --no-dependencies",
+    "test:vscode": "npm run build && node test/integration/run.mjs"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.135.0"
+    "@anthropic-ai/sdk": "^0.135.0",
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
     "@types/vscode": "^1.100.0",
     "@vscode/codicons": "^0.0.46-24",
+    "@vscode/test-electron": "^3.1.0",
     "@vscode/vsce": "^3.0.0",
     "esbuild": "^0.25.0",
     "tsx": "^4.19.0",

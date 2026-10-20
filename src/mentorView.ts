@@ -7,6 +7,8 @@ import { ProgressStore, streak } from "./progress";
 import { ChatTurn, MentorProvider, ProviderError } from "./providers/types";
 import { AnthropicProvider } from "./providers/anthropic";
 import { OllamaProvider } from "./providers/ollama";
+import { normalizeScene, scenePrompt, SceneSchema, extractLineRefs } from "./scene";
+import { EditorPanda, PandaWhereabouts } from "./editorPanda";
 
 export const SECRET_KEY = "seniorDevMentor.anthropicApiKey";
 const MAX_TURNS = 12;
@@ -20,7 +22,9 @@ type FromWebview =
   | { type: "openSettings" }
   | { type: "prediction"; right: boolean }
   | { type: "resetProgress" }
-  | { type: "goToLine"; line: number };
+  | { type: "visitLine"; line: number; note: string }
+  | { type: "pandaDismiss" }
+  | { type: "visualize"; prompt: string; useSelection: boolean };
 
 // Label and Codicon (https://microsoft.github.io/vscode-codicons/) for each action.
 const ACTION_LABELS: Record<MentorAction, { text: string; icon: string }> = {
@@ -44,10 +48,12 @@ export class MentorViewProvider implements vscode.WebviewViewProvider {
   private lastEditor?: vscode.TextEditor;
   private replyId = 0;
   private pending: unknown[] = [];
+  private sceneAbort?: AbortController;
 
   constructor(
     private readonly ctx: vscode.ExtensionContext,
     private readonly progress: ProgressStore,
+    private readonly panda: EditorPanda,
   ) {
     this.lastEditor = vscode.window.activeTextEditor;
     ctx.subscriptions.push(
@@ -72,8 +78,26 @@ export class MentorViewProvider implements vscode.WebviewViewProvider {
     await this.ask(action, text);
   }
 
-  nudge(question: string, line: number, fileName: string): void {
-    this.post({ type: "nudge", question, line, fileName });
+  /** A save nudge. `walked` is true when the panda already went to the line in the editor. */
+  nudge(question: string, line: number, fileName: string, walked: boolean): void {
+    this.post({ type: "nudge", question, line, fileName, walked });
+  }
+
+  /** The editor panda moved (or came home); the sidebar panda mirrors it. */
+  pandaMoved(where: PandaWhereabouts | null): void {
+    this.post(where ? { type: "pandaAway", ...where } : { type: "pandaBack" });
+  }
+
+  /** Send the panda to lines of the file the student is working on. */
+  async visitLines(stops: { line: number; note: string }[]): Promise<boolean> {
+    const ed = this.lastEditor;
+    if (!ed || ed.document.isClosed || !this.editorPandaEnabled()) return false;
+    return this.panda.tour(ed.document.uri, stops, { reveal: true, viewColumn: ed.viewColumn });
+  }
+
+  editorPandaEnabled(): boolean {
+    const cfg = vscode.workspace.getConfiguration("seniorDevMentor");
+    return cfg.get<boolean>("mascot", true) && cfg.get<boolean>("editorPanda", true);
   }
 
   newProblem(): void {
@@ -124,14 +148,22 @@ export class MentorViewProvider implements vscode.WebviewViewProvider {
         await this.progress.reset();
         this.sendProgress();
         break;
-      case "goToLine": {
-        const ed = this.lastEditor;
-        if (ed) {
-          const pos = new vscode.Position(Math.max(0, m.line), 0);
-          await vscode.window.showTextDocument(ed.document, { viewColumn: ed.viewColumn, selection: new vscode.Range(pos, pos) });
+      case "visitLine":
+        if (!(await this.visitLines([{ line: m.line - 1, note: m.note }]))) {
+          // No editor panda: just jump to the line.
+          const ed = this.lastEditor;
+          if (ed) {
+            const pos = new vscode.Position(Math.max(0, m.line - 1), 0);
+            await vscode.window.showTextDocument(ed.document, { viewColumn: ed.viewColumn, selection: new vscode.Range(pos, pos) });
+          }
         }
         break;
-      }
+      case "pandaDismiss":
+        this.panda.dismiss();
+        break;
+      case "visualize":
+        await this.visualize(m.prompt, m.useSelection);
+        break;
     }
   }
 
@@ -219,7 +251,7 @@ export class MentorViewProvider implements vscode.WebviewViewProvider {
       else if (action === "quiz") p.quizzes++;
       else if (action !== "hint") p.questions++;
     });
-    await this.streamReply(content);
+    await this.streamReply(content, action, code);
   }
 
   private buildUserContent(action: MentorAction, text: string, code: CodeContext | undefined, extra?: string): string {
@@ -232,7 +264,7 @@ export class MentorViewProvider implements vscode.WebviewViewProvider {
     return parts.join("\n\n");
   }
 
-  private async streamReply(userContent: string): Promise<void> {
+  private async streamReply(userContent: string, action: MentorAction, code: CodeContext | undefined): Promise<void> {
     const id = ++this.replyId;
     const guard = new SolutionGuard(this.guardOptions());
     const abort = new AbortController();
@@ -260,6 +292,7 @@ export class MentorViewProvider implements vscode.WebviewViewProvider {
         for (const c of guard.concepts) p.concepts[c] = (p.concepts[c] ?? 0) + 1;
       });
       this.sendProgress();
+      await this.sendPandaToLines(shown, action, code);
     } catch (err) {
       this.turns.pop(); // drop the unanswered question so history stays valid
       if (abort.signal.aborted) {
@@ -271,6 +304,60 @@ export class MentorViewProvider implements vscode.WebviewViewProvider {
       }
     } finally {
       this.abort = undefined;
+    }
+  }
+
+  /** After a review, hint or error explanation, the panda walks to the lines the reply points at. */
+  private async sendPandaToLines(reply: string, action: MentorAction, code: CodeContext | undefined): Promise<void> {
+    if (!code || !["review", "hint", "explainError"].includes(action)) return;
+    const doc = this.lastEditor?.document;
+    if (!doc || doc.uri.toString() !== code.problemKey) return;
+    let stops = extractLineRefs(reply, doc.lineCount).map((r) => ({ line: r.line - 1, note: r.note }));
+    if (!stops.length && action === "explainError" && code.diagnosticLines.length) {
+      const firstParagraph = reply.split(/\n\s*\n/).find((p) => p.trim()) ?? "";
+      stops = [{ line: code.diagnosticLines[0], note: firstParagraph.replace(/\[\[L(\d+)\]\]/g, "line $1") }];
+    }
+    if (stops.length) await this.visitLines(stops);
+  }
+
+  /** "Visualize anything": ask the model for a scene, check it, send it to the player. */
+  private async visualize(prompt: string, useSelection: boolean): Promise<void> {
+    this.sceneAbort?.abort();
+    const verdict = classifyRequest(prompt);
+    if (verdict.kind !== "allowed") {
+      await this.progress.update((p) => p.solutionRequestsRedirected++);
+      this.post({ type: "sceneError", message: "I can draw how something works, but not hand over a solution. Try describing the idea, like \"how does reversing a linked list work?\"" });
+      return;
+    }
+    const code = useSelection ? codeContext(this.lastEditor) : undefined;
+    if (useSelection && !code) {
+      this.post({ type: "sceneError", message: "Open your file and select the code you want to see run, then try again." });
+      return;
+    }
+    if (!prompt.trim() && !code) {
+      this.post({ type: "sceneError", message: "Describe what you want to see, or pick an example." });
+      return;
+    }
+    const user = code
+      ? `Trace this code of mine step by step with a small example input and draw the data structures it builds or changes.${prompt.trim() ? ` What I want to see: ${prompt.trim()}` : ""}\n\n${formatContext(code)}`
+      : `Visualize: ${prompt.trim()}`;
+
+    const abort = new AbortController();
+    this.sceneAbort = abort;
+    this.post({ type: "sceneLoading" });
+    try {
+      const raw = await (await this.provider()).json(scenePrompt(), user, SceneSchema, abort.signal);
+      if (abort.signal.aborted) return;
+      const scene = normalizeScene(raw, this.guardOptions());
+      this.post({ type: "scene", scene });
+      await this.progress.update((p) => p.visualizations++);
+      this.sendProgress();
+    } catch (err) {
+      if (abort.signal.aborted) return;
+      const message = err instanceof Error ? err.message : String(err);
+      this.post({ type: "sceneError", message, action: err instanceof ProviderError ? err.action : undefined });
+    } finally {
+      if (this.sceneAbort === abort) this.sceneAbort = undefined;
     }
   }
 
@@ -335,10 +422,55 @@ export class MentorViewProvider implements vscode.WebviewViewProvider {
       <div class="zzz">z<span>z</span><span>z</span></div>
       <div class="dots"><span></span><span></span><span></span></div>
     </div>
+    <div id="awaySign" class="away-sign" hidden>
+      <span id="awayText"></span>
+      <button id="awayBack" class="secondary small" title="Send the panda back to the sidebar">${icon("home")}Call back</button>
+    </div>
   </div>
 </section>
 
 <section id="tab-visualize" class="panel">
+  <div class="seg" role="tablist">
+    <button class="seg-btn active" data-viz="anything" role="tab">${icon("sparkle")}Anything</button>
+    <button class="seg-btn" data-viz="sorting" role="tab">${icon("graph")}Sorting &amp; search</button>
+  </div>
+
+  <div id="viz-anything" class="viz-pane active">
+    <textarea id="vizPrompt" rows="2" placeholder="What do you want to see? e.g. 'how a linked list gets reversed', 'collisions in a hash map', 'DFS on a graph'"></textarea>
+    <div class="row viz-ask">
+      <span class="row">
+        <button id="vizGo">${icon("sparkle")}Visualize</button>
+        <button id="vizCode" class="secondary" title="Trace your selected code (or the whole file) with a small example input">${icon("code")}My code</button>
+      </span>
+      <label class="check small"><input id="scenePredict" type="checkbox" checked> Predict</label>
+    </div>
+    <div class="examples">
+      <span class="muted small">Examples (work offline):</span>
+      <button class="chip" data-example="linkedListReverse">Reverse a linked list</button>
+      <button class="chip" data-example="stackOps">Stack</button>
+      <button class="chip" data-example="queueOps">Queue</button>
+      <button class="chip" data-example="bfs">BFS on a graph</button>
+      <button class="chip" data-example="hashChaining">Hash table</button>
+      <button class="chip" data-example="treeInorder">BST traversal</button>
+    </div>
+    <div id="sceneStatus" class="scene-status" hidden></div>
+    <div id="sceneBox" class="scene-box" hidden>
+      <div id="sceneTitle" class="scene-title"></div>
+      <div id="sceneStage" class="scene-stage"><svg id="sceneSvg" class="scene-svg"></svg></div>
+      <div id="sceneCaption" class="caption"></div>
+      <div id="scenePredictBox" class="predict" hidden></div>
+      <div class="row scene-controls">
+        <span class="row">
+          <button id="scenePrev" class="secondary" title="Previous step">${icon("arrow-left")}</button>
+          <button id="scenePlay">${icon("play")}Play</button>
+          <button id="sceneNext" class="secondary" title="Next step">${icon("arrow-right")}</button>
+        </span>
+        <span id="sceneCounter" class="muted small"></span>
+      </div>
+    </div>
+  </div>
+
+  <div id="viz-sorting" class="viz-pane">
   <div class="viz-controls">
     <label>Algorithm
       <select id="algo">
@@ -363,6 +495,7 @@ export class MentorViewProvider implements vscode.WebviewViewProvider {
   <div id="predictBox" class="predict" hidden></div>
   <pre id="pseudo" class="pseudo"></pre>
   <div id="vizStats" class="muted small"></div>
+  </div>
 </section>
 
 <section id="tab-progress" class="panel">
@@ -373,6 +506,7 @@ export class MentorViewProvider implements vscode.WebviewViewProvider {
 <script nonce="${nonce}" src="${uri("markdown.js")}"></script>
 <script nonce="${nonce}" src="${uri("mascot.js")}"></script>
 <script nonce="${nonce}" src="${uri("visualizer.js")}"></script>
+<script nonce="${nonce}" src="${uri("scene.js")}"></script>
 <script nonce="${nonce}" src="${uri("main.js")}"></script>
 </body>
 </html>`;

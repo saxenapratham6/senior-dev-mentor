@@ -1,4 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
+import type { z } from "zod";
 import { ChatTurn, MentorProvider, ProviderError } from "./types";
 
 // Models that accept the server-side refusal fallback ("default" routing).
@@ -44,6 +46,29 @@ export class AnthropicProvider implements MentorProvider {
         yield "\n\nI can't help with that one. Let's get back to your code. What are you working on?";
       }
     } catch (err) {
+      throw toProviderError(err);
+    }
+  }
+
+  async json(system: string, user: string, schema: z.ZodType, signal: AbortSignal): Promise<unknown> {
+    try {
+      const response = await this.client.messages.parse(
+        {
+          model: this.model,
+          max_tokens: 16000,
+          thinking: { type: "adaptive" },
+          output_config: { effort: this.effort, format: zodOutputFormat(schema) },
+          system,
+          messages: [{ role: "user", content: user }],
+        },
+        { signal },
+      );
+      if (response.stop_reason === "refusal") throw new ProviderError("Claude declined to draw that one. Try describing it differently.");
+      if (response.stop_reason === "max_tokens") throw new ProviderError("That visualization got too big. Try something smaller, like fewer elements.");
+      if (response.parsed_output == null) throw new ProviderError("Claude's visualization didn't come back in the expected shape. Try again.");
+      return response.parsed_output;
+    } catch (err) {
+      if (err instanceof ProviderError) throw err;
       throw toProviderError(err);
     }
   }

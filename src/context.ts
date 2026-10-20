@@ -13,6 +13,8 @@ export interface CodeContext {
   fullText: string;
   problemKey: string;
   diagnostics: string[];
+  /** 0-based lines of those diagnostics, closest to the cursor first. */
+  diagnosticLines: number[];
   cursorLine: number; // 1-based
 }
 
@@ -34,12 +36,12 @@ export function codeContext(editor: vscode.TextEditor | undefined): CodeContext 
   }
   const code = doc.getText(new vscode.Range(start, 0, end, doc.lineAt(end).text.length));
 
-  const diagnostics = vscode.languages
+  const nearest = vscode.languages
     .getDiagnostics(doc.uri)
     .filter((d) => d.severity <= vscode.DiagnosticSeverity.Warning)
     .sort((a, b) => Math.abs(a.range.start.line - sel.active.line) - Math.abs(b.range.start.line - sel.active.line))
-    .slice(0, 5)
-    .map((d) => `line ${d.range.start.line + 1}: ${d.message}`);
+    .slice(0, 5);
+  const diagnostics = nearest.map((d) => `line ${d.range.start.line + 1}: ${d.message}`);
 
   return {
     fileName: path.basename(doc.fileName),
@@ -49,6 +51,7 @@ export function codeContext(editor: vscode.TextEditor | undefined): CodeContext 
     fullText: doc.getText(),
     problemKey: doc.uri.toString(),
     diagnostics,
+    diagnosticLines: nearest.map((d) => d.range.start.line),
     cursorLine: sel.active.line + 1,
   };
 }

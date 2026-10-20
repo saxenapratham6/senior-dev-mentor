@@ -8,7 +8,8 @@
       .replace(/`([^`]+)`/g, "<code>$1</code>")
       .replace(/\*\*([^*]+)\*\*/g, "<b>$1</b>")
       .replace(/(^|[^*\w])\*([^*\n]+)\*(?!\w)/g, "$1<i>$2</i>")
-      .replace(/(^|\W)_([^_\n]+)_(?!\w)/g, "$1<i>$2</i>");
+      .replace(/(^|\W)_([^_\n]+)_(?!\w)/g, "$1<i>$2</i>")
+      .replace(/\[\[L(\d{1,6})\]\]/g, '<button class="line-chip" data-line="$1" title="Send the panda to this line"><i class="codicon codicon-location"></i>line $1</button>');
   }
 
   function render(md) {

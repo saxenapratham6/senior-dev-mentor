@@ -26,6 +26,8 @@
   let bubbleTimer = null;
   let enabled = true;
   let ponderIndex = Math.floor(Math.random() * PONDER.length);
+  let away = null; // null | "leaving" | "gone" | "returning"
+  let onAwayDone = null;
 
   function setState(next, duration) {
     state = next;
@@ -50,6 +52,7 @@
   function tick() {
     if (!enabled || !stage.clientWidth) return;
     idleTicks++;
+    if (away) return walkAway();
     if (mood) {
       positionBubble();
       return;
@@ -67,6 +70,40 @@
     if (--frames <= 0) chooseNext();
   }
 
+  // Leaving for the editor: walk off the right edge, then hide.
+  // Coming back: appear at the right edge and walk in.
+  function walkAway() {
+    if (away === "gone") return;
+    const dir = away === "leaving" ? 1 : -1;
+    x += dir * 9;
+    panda.style.left = `${x}px`;
+    if (away === "leaving" && x > stage.clientWidth + 10) {
+      away = "gone";
+      panda.hidden = true;
+      if (onAwayDone) onAwayDone();
+    } else if (away === "returning" && x <= Math.max(10, maxX() - 60)) {
+      away = null;
+      chooseNext();
+    }
+  }
+
+  function leave(done) {
+    bubble.hidden = true;
+    mood = null;
+    onAwayDone = done;
+    if (away === "gone") return done && done();
+    away = "leaving";
+    panda.className = "panda walk-right";
+  }
+
+  function comeBack() {
+    if (!away) return;
+    away = "returning";
+    panda.hidden = false;
+    x = stage.clientWidth + 6;
+    panda.className = "panda walk-left";
+  }
+
   function positionBubble() {
     if (bubble.hidden) return;
     const w = bubble.offsetWidth;
@@ -76,7 +113,7 @@
 
   /** Moods: think (waiting on AI), talk (streaming), cheer, wag (said no), alert (noticed something). */
   function setMood(m) {
-    if (!panda) return;
+    if (!panda || away) return;
     idleTicks = 0;
     mood = m;
     if (!m) return chooseNext();
@@ -89,7 +126,7 @@
   }
 
   function say(html, ms = 6000, onClick) {
-    if (!bubble || !enabled) return;
+    if (!bubble || !enabled || away) return;
     idleTicks = 0;
     if (state === "sleep") chooseNext();
     bubble.innerHTML = html;
@@ -126,5 +163,5 @@
     if (stage) stage.hidden = !on;
   }
 
-  window.Mascot = { init, setMood, say, setEnabled };
+  window.Mascot = { init, setMood, say, setEnabled, leave, comeBack };
 })();

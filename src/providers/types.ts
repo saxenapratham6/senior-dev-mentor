@@ -1,3 +1,5 @@
+import type { z } from "zod";
+
 export interface ChatTurn {
   role: "user" | "assistant";
   content: string;
@@ -7,6 +9,8 @@ export interface MentorProvider {
   readonly label: string;
   /** Streams the reply as text chunks. Throws ProviderError on failures the student can fix. */
   stream(system: string, turns: ChatTurn[], signal: AbortSignal): AsyncIterable<string>;
+  /** One reply that must match a JSON schema. Returns the parsed object, still unvalidated by the caller. */
+  json(system: string, user: string, schema: z.ZodType, signal: AbortSignal): Promise<unknown>;
 }
 
 /** An error with a message written for the student, plus an optional fix-it action. */

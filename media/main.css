@@ -136,7 +136,7 @@ textarea {
 }
 
 /* the panda stage */
-.stage { position: relative; height: 76px; flex-shrink: 0; margin: 6px -10px 0; border-top: 1px dashed var(--border); overflow: visible; }
+.stage { position: relative; height: 76px; flex-shrink: 0; margin: 6px -10px 0; border-top: 1px dashed var(--border); overflow-x: clip; overflow-y: visible; }
 .bubble {
   position: absolute;
   bottom: 66px;
@@ -295,3 +295,101 @@ button .codicon { font-size: 14px; }
 .msg.error .codicon-warning { color: var(--warn); }
 .msg blockquote.guard { color: var(--vscode-foreground); border-left-color: var(--warn); }
 .msg blockquote.guard .codicon, .guard-note .codicon { color: var(--warn); }
+
+/* visualize: segmented toggle */
+.seg { display: flex; border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; margin-bottom: 8px; flex-shrink: 0; }
+.seg-btn { flex: 1; border: none; border-radius: 0; background: none; color: var(--muted); padding: 5px 6px; }
+.seg-btn:hover:not(:disabled) { background: var(--vscode-list-hoverBackground); }
+.seg-btn.active { background: var(--vscode-button-secondaryBackground); color: var(--vscode-foreground); }
+.viz-pane { display: none; flex-direction: column; }
+.viz-pane.active { display: flex; }
+.viz-ask { margin: 6px 0; }
+.viz-ask .check { display: flex; align-items: center; gap: 4px; }
+.examples { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; margin-bottom: 8px; }
+.chip {
+  font-size: 0.88em;
+  padding: 2px 8px;
+  border-radius: 10px;
+  color: var(--vscode-foreground);
+  background: var(--vscode-badge-background, var(--vscode-button-secondaryBackground));
+  border: 1px solid var(--border);
+}
+.chip:hover:not(:disabled) { background: var(--vscode-list-hoverBackground); }
+.scene-status { padding: 6px 8px; border: 1px solid var(--border); border-radius: var(--radius); margin-bottom: 8px; }
+.scene-status.error { border-color: var(--warn); }
+.scene-status .codicon { color: var(--muted); }
+.scene-status.error .codicon-warning { color: var(--warn); }
+
+/* scene player */
+.scene-title { font-weight: 600; margin: 4px 0 6px; }
+.scene-stage {
+  position: relative;
+  min-height: 120px;
+  background: var(--vscode-editor-background);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  flex-shrink: 0;
+}
+.scene-svg { position: absolute; inset: 0; pointer-events: none; overflow: visible; }
+.scene-link { stroke: var(--muted); stroke-width: 1.6; fill: none; }
+.scene-link.hl { stroke: var(--compare); stroke-width: 2.2; }
+.arrow-head { fill: var(--muted); }
+.scene-link-label { fill: var(--muted); font-size: 10px; text-anchor: middle; font-family: var(--vscode-editor-font-family); }
+.scene-label, .scene-node, .scene-ptr, .stack-base { position: absolute; left: 0; top: 0; will-change: transform; }
+.scene-label { font-size: 0.8em; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); white-space: nowrap; }
+.scene-node {
+  height: 30px;
+  line-height: 28px;
+  text-align: center;
+  font-family: var(--vscode-editor-font-family);
+  font-size: 12px;
+  border: 1.5px solid var(--bar);
+  border-radius: 5px;
+  background: var(--vscode-sideBar-background);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding: 0 3px;
+  transition: opacity 0.25s, background 0.2s, border-color 0.2s;
+}
+.scene-node.round { border-radius: 15px; }
+.scene-node.bucket { border-style: dashed; color: var(--muted); }
+.scene-node.var { text-align: left; padding-left: 8px; border-color: var(--border); }
+.scene-node.hl { border-color: var(--compare); background: color-mix(in srgb, var(--compare) 22%, transparent); }
+.scene-node.changed { animation: changed 0.7s ease-out; }
+@keyframes changed { from { background: color-mix(in srgb, var(--swap) 55%, transparent); } }
+.scene-ptr {
+  font-size: 11px;
+  font-family: var(--vscode-editor-font-family);
+  color: var(--pivot);
+  white-space: nowrap;
+  font-weight: 600;
+  transition: opacity 0.25s;
+}
+.scene-ptr .codicon { font-size: 10px; margin: 0; vertical-align: middle; }
+.scene-ptr.null { color: var(--muted); font-weight: normal; }
+.stack-base { width: 84px; height: 0; border-top: 2px solid var(--muted); }
+.entering { animation: fade-in 0.3s ease-out; }
+@keyframes fade-in { from { opacity: 0; } }
+.leaving { opacity: 0; }
+.scene-controls { margin: 6px 0 10px; }
+
+/* line chips in replies */
+.line-chip {
+  font: inherit;
+  font-size: 0.9em;
+  padding: 0 6px 0 3px;
+  border-radius: 9px;
+  color: var(--vscode-textLink-foreground);
+  background: color-mix(in srgb, var(--vscode-textLink-foreground) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--vscode-textLink-foreground) 40%, transparent);
+  vertical-align: baseline;
+}
+.line-chip .codicon { font-size: 12px; margin-right: 2px; vertical-align: -2px; }
+.line-chip:hover:not(:disabled) { background: color-mix(in srgb, var(--vscode-textLink-foreground) 22%, transparent); }
+
+/* the panda's away sign */
+.away-sign { position: absolute; left: 10px; right: 10px; bottom: 10px; display: flex; flex-direction: column; gap: 6px; font-size: 0.9em; color: var(--muted); }
+.away-sign .codicon-location { color: var(--vscode-textLink-foreground); }
+.away-sign button { align-self: flex-start; }

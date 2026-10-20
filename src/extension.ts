@@ -3,12 +3,17 @@ import * as path from "path";
 import { MentorViewProvider, SECRET_KEY } from "./mentorView";
 import { ProgressStore } from "./progress";
 import { findNudges } from "./heuristics";
+import { EditorPanda, plain } from "./editorPanda";
 
 const NUDGE_LANGUAGES = new Set(["python", "javascript", "typescript", "java", "c", "cpp", "csharp", "go", "rust"]);
 
-export function activate(context: vscode.ExtensionContext): void {
+/** Returned so the integration tests can reach the panda; not a public API. */
+export function activate(context: vscode.ExtensionContext): { panda: EditorPanda } {
   const progress = new ProgressStore(context.globalState);
-  const mentor = new MentorViewProvider(context, progress);
+  let mentor: MentorViewProvider | undefined;
+  const panda = new EditorPanda(context.extensionUri, (where) => mentor?.pandaMoved(where));
+  mentor = new MentorViewProvider(context, progress, panda);
+  context.subscriptions.push(panda);
 
   context.subscriptions.push(
     vscode.window.registerWebviewViewProvider("seniorDevMentor.view", mentor, {
@@ -19,6 +24,13 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand("seniorDevMentor.hint", () => mentor.run("hint")),
     vscode.commands.registerCommand("seniorDevMentor.explainError", () => mentor.run("explainError")),
     vscode.commands.registerCommand("seniorDevMentor.newProblem", () => mentor.newProblem()),
+    vscode.commands.registerCommand("seniorDevMentor.pandaNext", () => panda.next()),
+    vscode.commands.registerCommand("seniorDevMentor.pandaDismiss", () => panda.dismiss()),
+    vscode.commands.registerCommand("seniorDevMentor.pandaAsk", () => {
+      const stop = panda.current;
+      if (!stop) return;
+      return mentor.run("chat", `About line ${stop.line + 1}: "${plain(stop.note, 200)}" Can you help me understand this better? I want to work out the change myself.`);
+    }),
     vscode.commands.registerCommand("seniorDevMentor.setApiKey", async () => {
       const key = await vscode.window.showInputBox({
         title: "Anthropic API key",
@@ -52,9 +64,14 @@ export function activate(context: vscode.ExtensionContext): void {
       const fresh = findNudges(doc.getText()).find((n) => !asked.has(`${doc.uri}#${n.concept}`));
       if (!fresh) return;
       asked.add(`${doc.uri}#${fresh.concept}`);
-      mentor.nudge(fresh.question, fresh.line, path.basename(doc.fileName));
+      // The panda walks over only if that line is already on screen; it never scrolls someone's editor.
+      void (async () => {
+        const walked = mentor.editorPandaEnabled() && (await panda.tour(doc.uri, [{ line: fresh.line, note: fresh.question }], { reveal: false }));
+        mentor.nudge(fresh.question, fresh.line, path.basename(doc.fileName), walked);
+      })();
     }),
   );
+  return { panda };
 }
 
 export function deactivate(): void {}

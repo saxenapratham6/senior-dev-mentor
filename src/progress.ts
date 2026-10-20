@@ -8,6 +8,7 @@ export interface Progress {
   codeHidden: number;
   plansChecked: number;
   quizzes: number;
+  visualizations: number;
   predictionsRight: number;
   predictionsTotal: number;
   concepts: Record<string, number>;
@@ -24,6 +25,7 @@ const empty = (): Progress => ({
   codeHidden: 0,
   plansChecked: 0,
   quizzes: 0,
+  visualizations: 0,
   predictionsRight: 0,
   predictionsTotal: 0,
   concepts: {},
