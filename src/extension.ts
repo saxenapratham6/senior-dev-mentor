@@ -4,11 +4,12 @@ import { MentorViewProvider, SECRET_KEY } from "./mentorView";
 import { ProgressStore } from "./progress";
 import { findNudges } from "./heuristics";
 import { EditorPanda, plain } from "./editorPanda";
+import type { PandaBoard } from "./board";
 
 const NUDGE_LANGUAGES = new Set(["python", "javascript", "typescript", "java", "c", "cpp", "csharp", "go", "rust"]);
 
 /** Returned so the integration tests can reach the panda; not a public API. */
-export function activate(context: vscode.ExtensionContext): { panda: EditorPanda } {
+export function activate(context: vscode.ExtensionContext): { panda: EditorPanda; board: PandaBoard } {
   const progress = new ProgressStore(context.globalState);
   let mentor: MentorViewProvider | undefined;
   const panda = new EditorPanda(context.extensionUri, (where) => mentor?.pandaMoved(where));
@@ -24,6 +25,8 @@ export function activate(context: vscode.ExtensionContext): { panda: EditorPanda
     vscode.commands.registerCommand("seniorDevMentor.hint", () => mentor.run("hint")),
     vscode.commands.registerCommand("seniorDevMentor.explainError", () => mentor.run("explainError")),
     vscode.commands.registerCommand("seniorDevMentor.newProblem", () => mentor.newProblem()),
+    vscode.commands.registerCommand("seniorDevMentor.showMe", () => mentor.showMeFromEditor()),
+    vscode.commands.registerCommand("seniorDevMentor.wrapUp", () => mentor.wrapUp()),
     vscode.commands.registerCommand("seniorDevMentor.pandaNext", () => panda.next()),
     vscode.commands.registerCommand("seniorDevMentor.pandaDismiss", () => panda.dismiss()),
     vscode.commands.registerCommand("seniorDevMentor.pandaAsk", () => {
@@ -66,12 +69,12 @@ export function activate(context: vscode.ExtensionContext): { panda: EditorPanda
       asked.add(`${doc.uri}#${fresh.concept}`);
       // The panda walks over only if that line is already on screen; it never scrolls someone's editor.
       void (async () => {
-        const walked = mentor.editorPandaEnabled() && (await panda.tour(doc.uri, [{ line: fresh.line, note: fresh.question }], { reveal: false }));
+        const walked = await panda.tour(doc.uri, [{ line: fresh.line, note: fresh.question }], { reveal: false });
         mentor.nudge(fresh.question, fresh.line, path.basename(doc.fileName), walked);
       })();
     }),
   );
-  return { panda };
+  return { panda, board: mentor.board };
 }
 
 export function deactivate(): void {}

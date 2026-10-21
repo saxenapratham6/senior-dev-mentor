@@ -194,6 +194,70 @@
 
   const EXAMPLES = { linkedListReverse, stackOps, queueOps, bfs, hashChaining, treeInorder };
 
+  // Sorting and searching come from the step generators in visualizer.js,
+  // replayed into snapshots. Each value keeps its id, so swapped boxes slide.
+  const ALGO_TITLES = { bubble: "Bubble sort", selection: "Selection sort", insertion: "Insertion sort", merge: "Merge sort", quick: "Quick sort", binary: "Binary search", bst: "Binary search tree: insert" };
+
+  function algoScene(name, input) {
+    const gen = window.Visualizer.ALGOS[name];
+    if (name === "bst") {
+      const values = input || [8, 3, 10, 1, 6, 14, 4, 7];
+      const steps = [];
+      for (const s of gen(values.slice())) {
+        const nodes = s.nodes.map((x) => n(`t${x.v}`, x.v));
+        const links = [];
+        s.nodes.forEach((x) => {
+          if (x.left !== -1) links.push({ from: `t${x.v}`, to: `t${s.nodes[x.left].v}`, label: "L" });
+          if (x.right !== -1) links.push({ from: `t${x.v}`, to: `t${s.nodes[x.right].v}`, label: "R" });
+        });
+        const at = s.at >= 0 ? [`t${s.nodes[s.at].v}`] : [];
+        steps.push({ caption: s.caption, states: [st("T", nodes, links, s.nodes.length ? [{ name: "root", target: `t${s.nodes[0].v}` }] : [], at)], question: s.q || null });
+      }
+      return { title: ALGO_TITLES[name], structures: [{ id: "T", kind: "tree", label: "tree" }], steps };
+    }
+
+    let values = input || [7, 3, 9, 1, 6, 2, 8];
+    let target;
+    if (name === "binary") {
+      values = input || [2, 5, 8, 12, 16, 23, 38, 56, 72];
+      target = values[6];
+    }
+    const ids = values.map((_, i) => `v${i}`);
+    const vals = values.slice();
+    let range = null;
+    let compares = 0;
+    const steps = [{ caption: name === "binary" ? `Looking for ${target} in a sorted array.` : "Here's the unsorted array.", states: [st("A", ids.map((id, k) => n(id, vals[k])))], question: null }];
+    for (const s of gen(values.slice(), target)) {
+      let hl = [];
+      const ptrs = [];
+      if (s.type === "compare") {
+        hl = s.i === s.j ? [ids[s.i]] : [ids[s.i], ids[s.j]];
+        if (name === "binary") ptrs.push({ name: "mid", target: ids[s.i] });
+      } else if (s.type === "swap") {
+        [ids[s.i], ids[s.j]] = [ids[s.j], ids[s.i]];
+        [vals[s.i], vals[s.j]] = [vals[s.j], vals[s.i]];
+        hl = [ids[s.i], ids[s.j]];
+      } else if (s.type === "set") {
+        vals[s.i] = s.value;
+        hl = [ids[s.i]];
+      } else if (s.type === "mark" || s.type === "pivot") {
+        hl = [ids[s.i]];
+        ptrs.push({ name: s.type === "pivot" ? "pivot" : "min", target: ids[s.i] });
+      } else if (s.type === "sorted") {
+        hl = s.idx.length < vals.length ? s.idx.map((k) => ids[k]) : [];
+      } else if (s.type === "range") {
+        range = s.lo <= s.hi ? [s.lo, s.hi] : null;
+      }
+      if (range && name === "binary") {
+        ptrs.push({ name: "lo", target: ids[range[0]] }, { name: "hi", target: ids[range[1]] });
+      }
+      // Ask about every other comparison so predict mode stays a game, not a chore.
+      const ask = s.q && (s.type !== "compare" || compares++ % 2 === 0);
+      steps.push({ caption: s.caption, states: [st("A", ids.map((id, k) => n(id, vals[k])), [], ptrs, hl)], question: ask ? s.q : null });
+    }
+    return { title: ALGO_TITLES[name], structures: [{ id: "A", kind: "array", label: name === "binary" ? "sorted array" : "array" }], steps };
+  }
+
   // ------------------------------------------------------------ layout
 
   function layoutStructure(kind, state, W) {
@@ -295,7 +359,7 @@
 
   // ------------------------------------------------------------ player
 
-  let el, onPrediction;
+  let el, onPrediction, onStep, onAsk;
   let scene = null;
   let idx = -1;
   let playing = false;
@@ -340,6 +404,7 @@
     render(step);
     el.caption.textContent = step.caption;
     el.counter.textContent = `${i + 1} / ${scene.steps.length}`;
+    if (onStep) onStep(i, scene.steps.length);
     el.prev.disabled = i === 0;
     el.next.disabled = i === scene.steps.length - 1;
     return true;
@@ -352,6 +417,7 @@
     stop();
     el.predictBox.hidden = false;
     el.predictBox.innerHTML = `<div class="q"><i class="codicon codicon-lightbulb"></i>Predict: ${esc(q.text)}</div><div class="row"></div>`;
+    if (onAsk) onAsk();
     const row = el.predictBox.querySelector(".row");
     q.options.forEach((opt, k) => {
       const b = document.createElement("button");
@@ -583,9 +649,27 @@
 
   const esc = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
+  /** Where the student should look: the middle of the highlighted nodes, in stage pixels. */
+  function focusPoint() {
+    if (!scene || idx < 0) return null;
+    const step = scene.steps[idx];
+    const pts = [];
+    for (const r of regions) {
+      if (!r.state) continue;
+      for (const id of r.state.highlight) {
+        const it = items.get(`n:${r.structure.id}:${id}`);
+        if (it) pts.push({ x: it.to.x + (it.div.offsetWidth || NODE_W) / 2, y: it.to.y });
+      }
+    }
+    if (!pts.length) return null;
+    return { x: pts.reduce((a, p) => a + p.x, 0) / pts.length, y: Math.min(...pts.map((p) => p.y)), step };
+  }
+
   function init(elements, callbacks) {
     el = elements;
     onPrediction = callbacks.onPrediction;
+    onStep = callbacks.onStep;
+    onAsk = callbacks.onAsk;
     el.play.onclick = () => (playing ? stop() : play());
     el.next.onclick = () => {
       stop();
@@ -602,5 +686,5 @@
     new ResizeObserver(() => scene && idx >= 0 && render(scene.steps[idx])).observe(el.stage);
   }
 
-  window.ScenePlayer = { init, load, EXAMPLES };
+  window.ScenePlayer = { init, load, EXAMPLES, algoScene, focusPoint };
 })();

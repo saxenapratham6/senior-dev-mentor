@@ -8,20 +8,19 @@ Built for students learning a new language or their first data structures. The g
 
 ## What it does
 
+A panda lives in your code editor, and the sidebar is just a conversation.
+
 | | |
 |---|---|
-| **Check my plan** | Describe your approach *before* writing code; the mentor points out gaps and edge cases. |
-| **Hint ladder** | Three levels: a nudge (one question), then the concept, then a plain-English plan. Each level unlocks only after you change your code or write down what you tried. There is no fourth level with the answer. |
-| **Review my attempt** | One thing you did well, then questions that lead you to the bugs. No fixes. |
-| **Explain error** | What the editor's error means in plain English, plus a question that helps you find the cause. |
-| **Quiz me** | Questions about the code you just wrote: predict the output, the complexity, an edge case. |
-| **Teach me** | Learn a topic or a new language with tiny examples and an exercise to try in your editor. |
-| **Panda in your editor** | After a review, hint or error explanation, the panda walks down the gutter to each line the mentor pointed at and sits there with a short question. Hover the line for the full explanation, **Explain more**, **Next stop** or **Got it**. Edit the line and it heads back to the sidebar. |
-| **Save nudges** | On save, the panda may ask one question about a pattern it noticed: nested loops, recursion with no base case, swallowed exceptions, very long functions. No AI is involved. If that line is on screen, the panda walks to it; it never scrolls your editor on its own. |
-| **Visualize anything** | Describe what you want to see ("reversing a linked list", "collisions in a hash map", "DFS on a graph"), or press **My code** to trace your own selected code with a small input. Arrays, linked lists, stacks, queues, trees, graphs, hash tables and variables animate step by step, with nodes and pointers sliding between states. Six examples work offline. |
-| **Sorting & search** | Built-in animations of bubble, selection, insertion, merge and quick sort, binary search and BST insertion, with pseudocode. |
-| **Predict mode** | Every visualization can pause before a step and ask what happens next. |
-| **Progress** | Streak, concepts practiced, hints used, prediction accuracy, and a *think-to-hint ratio*. |
+| **The panda in your editor** | It sits beside the line you're working on and strolls over when you pause, thinks while the mentor works, and naps when you're idle. After a review, hint or error explanation it walks line by line to each spot worth a look and says a short question in a speech bubble. Hover the line for the full explanation, **Explain more**, **Next stop** or **Got it**. Edit the line and it moves on. |
+| **Plan** | Describe your approach *before* writing code; the mentor points out gaps and edge cases. |
+| **Hint** | Three levels: a nudge (one question), then the concept, then a plain-English plan. Each level unlocks only after you change your code or write down what you tried. There is no fourth level with the answer. |
+| **Review** | One thing you did well, then questions that lead you to the bugs. No fixes. |
+| **Error** | What the editor's error means in plain English, plus a question that helps you find the cause. |
+| **Quiz** | Questions about the code you just wrote: predict the output, the complexity, an edge case. |
+| **Show me** | The panda draws on its **board**, a panel beside your code. Type an idea ("reversing a linked list", "collisions in a hash map", "BFS"), or select your code to watch it run with a small input. Arrays, linked lists, stacks, queues, trees, graphs, hash tables and variables animate step by step; the panda walks to the part of the diagram that's changing, explains it, and asks you to predict the next move. Sorting and searching examples work offline. |
+| **Wrap up** | Done for the day, or with a plan? The panda puts your session on its board: what you worked on, what you figured out, how your plan went, what's still fuzzy, and what to try next. **Save as notes** writes it to a Markdown file. |
+| **Save nudges** | On save, the panda may walk over to a pattern it noticed (nested loops, recursion with no base case, swallowed exceptions, very long functions) and ask one question. No AI is involved, and it never scrolls your editor on its own. |
 
 ## Guardrails are code, not a prompt
 
@@ -45,7 +44,7 @@ The limits are unit-tested (`npm test`). In a live test, a small local model ign
    code --install-extension senior-dev-mentor-0.1.0.vsix
    ```
 
-3. Open the **Mentor** view in the secondary (right) sidebar. If the secondary sidebar is closed, toggle it with **View → Appearance → Secondary Side Bar**, or run **Mentor: Open Mentor** from the Command Palette.
+3. Open the **Mentor** view in the secondary (right) sidebar. The panda appears in your editor. If the secondary sidebar is closed, toggle it with **View → Appearance → Secondary Side Bar**, or run **Mentor: Open Mentor** from the Command Palette.
 
 ### Choose an AI model
 
@@ -63,8 +62,8 @@ The limits are unit-tested (`npm test`). In a live test, a small local model ign
 | `seniorDevMentor.ollamaUrl` | `http://localhost:11434` | |
 | `seniorDevMentor.maxCodeLines` | `3` | Longest code example shown (0–8) |
 | `seniorDevMentor.nudgeOnSave` | `true` | Panda questions on save |
-| `seniorDevMentor.mascot` | `true` | Show the panda |
-| `seniorDevMentor.editorPanda` | `true` | Let the panda walk to lines in your editor |
+| `seniorDevMentor.mascot` | `true` | Show the panda in your editor |
+| `seniorDevMentor.pandaFollowsCursor` | `true` | The panda strolls to your line when you pause |
 
 ## Icons
 
@@ -86,14 +85,17 @@ src/
   extension.ts      activation, commands, save nudges
   mentorView.ts     sidebar webview, the request → guard → model → guard pipeline
   guardrails.ts     deterministic request + output filters
-  scene.ts          "visualize anything" schema, validation, line references
-  editorPanda.ts    the panda's walks and notes in the editor
+  scene.ts          "Show me" scene schema, validation, line references
+  summary.ts        the wrap-up: session log, schema, notes export
+  board.ts          the panda's board panel
+  editorPanda.ts    the panda in the editor: follow, sleep, think, walk, speak
+  pandaPlacement.ts where the panda and its bubble go (pure, tested)
   hintLadder.ts     effort-gated hint levels
   heuristics.ts     no-AI code observations for save nudges
   prompts.ts        the mentor's teaching style
   providers/        Claude (Anthropic SDK) and Ollama
-media/              webview: chat, panda, scene player, visualizer, progress
-media/panda/        gutter sprites for the editor panda
+media/              sidebar chat, the board, scene player, algorithm steps
+media/panda/        panda poses (sit, walk, think, talk, cheer, sleep)
 test/               node:test suites
 ```
 
@@ -102,7 +104,7 @@ test/               node:test suites
 Before writing any code, we used [REA](https://github.com/morluto/rea) to statically analyze two existing extensions:
 
 - **Claude Code for VS Code:** registers a webview view in the `secondarySidebar` container (the right-hand sidebar) with `retainContextWhenHidden`, uses a CSP built from `webview.cspSource`, and listens for editor selection changes and diagnostics to build context. We use the same approach.
-- **vscode-pets:** each pet is a state machine (walk, run, sit, chase…) advanced by a 100 ms timer, moved by setting `style.left`/`style.bottom` on the sprite inside a webview. The panda uses the same pattern with a CSS-only sprite and adds moods (thinking, talking, cheering, noticing something). Pets can't leave their panel; our panda can, by swapping gutter-icon decorations in the editor frame by frame.
+- **vscode-pets:** each pet is a state machine (walk, run, sit, chase…) advanced by a 100 ms timer, moved by setting `style.left`/`style.bottom` on the sprite inside a webview. The panda uses the same pattern with a CSS-only sprite and adds moods (thinking, talking, cheering, noticing something). Pets can't leave their panel. Our panda lives in the editor itself: like Power Mode, it injects CSS through an editor decoration, so a sprite and a speech bubble are drawn beside a line of code, and moving that decoration line by line while swapping sprites makes it walk.
 
 ## License
 

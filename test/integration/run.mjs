@@ -18,7 +18,7 @@ const scratch = mkdtempSync(path.join(process.env.TMPDIR || tmpdir(), "mentor-it
 await runTests({
   vscodeExecutablePath: vscodePath,
   extensionDevelopmentPath: root,
-  extensionTestsPath: path.join(root, "test/integration/suite.cjs"),
+  extensionTestsPath: path.join(root, "test/integration", process.env.MENTOR_IT_SUITE || "suite.cjs"),
   launchArgs: ["--disable-extensions", "--user-data-dir", path.join(scratch, "user"), scratch],
-  extensionTestsEnv: { MENTOR_IT_DIR: scratch, MENTOR_IT_SHOT: process.env.MENTOR_IT_SHOT ?? "" },
+  extensionTestsEnv: { MENTOR_IT_DIR: scratch, LOOK_HOLD: process.env.LOOK_HOLD ?? "", LOOK_BOARD_HOLD: process.env.LOOK_BOARD_HOLD ?? "" },
 });

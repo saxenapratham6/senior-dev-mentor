@@ -19,7 +19,7 @@
 
 body {
   margin: 0;
-  padding: 0 10px;
+  padding: 8px 10px;
   color: var(--vscode-foreground);
   background: var(--vscode-sideBar-background);
   font-family: var(--vscode-font-family);
@@ -59,26 +59,7 @@ code {
   border-radius: 3px;
 }
 
-/* tabs */
-.tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--border); margin: 0 -10px; padding: 0 6px; flex-shrink: 0; }
-.tab {
-  background: none;
-  color: var(--muted);
-  border: none;
-  border-bottom: 2px solid transparent;
-  border-radius: 0;
-  padding: 7px 10px 6px;
-  text-transform: uppercase;
-  font-size: 0.85em;
-  letter-spacing: 0.04em;
-}
-.tab:hover:not(:disabled) { background: none; color: var(--vscode-foreground); }
-.tab.active { color: var(--vscode-foreground); border-bottom-color: var(--vscode-panelTitle-activeBorder, var(--accent)); }
-
-.panel { display: none; flex: 1; min-height: 0; flex-direction: column; padding-top: 8px; overflow-y: auto; }
-.panel.active { display: flex; }
-
-/* mentor tab */
+/* chat */
 .banner {
   border: 1px solid var(--warn);
   border-radius: var(--radius);
@@ -121,8 +102,26 @@ code {
 @keyframes blink { 0%, 100% { opacity: 0.2; } 50% { opacity: 1; } }
 
 .hint-meter { font-size: 0.9em; color: var(--muted); padding: 4px 0; letter-spacing: 0.02em; }
-.actions { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 4px; margin: 6px 0; }
-.actions button { text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding: 4px 8px; }
+.actions { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; margin: 6px 0; }
+.act {
+  color: var(--vscode-foreground);
+  background: transparent;
+  border: 1px solid var(--border);
+  padding: 3px 6px;
+  font-size: 0.92em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.act:hover:not(:disabled) { background: var(--vscode-list-hoverBackground); border-color: var(--vscode-focusBorder); }
+.act .codicon { color: var(--vscode-textLink-foreground); margin-right: 4px; }
+#showMe { border-color: color-mix(in srgb, var(--vscode-textLink-foreground) 55%, transparent); }
+.icon-btn { background: none; color: var(--vscode-foreground); border: 1px solid transparent; padding: 3px 5px; }
+.icon-btn:hover:not(:disabled) { background: var(--vscode-toolbar-hoverBackground, var(--vscode-list-hoverBackground)); }
+.icon-btn .codicon { margin: 0; font-size: 16px; }
+.tip { font-size: 0.9em; color: var(--muted); padding: 2px 2px 6px; }
+.msg.nudge { border-style: dashed; }
+.msg.nudge button { margin-top: 4px; }
 .composer { display: flex; flex-direction: column; gap: 6px; }
 textarea {
   width: 100%;
@@ -135,245 +134,14 @@ textarea {
   padding: 6px;
 }
 
-/* the panda stage */
-.stage { position: relative; height: 76px; flex-shrink: 0; margin: 6px -10px 0; border-top: 1px dashed var(--border); overflow-x: clip; overflow-y: visible; }
-.bubble {
-  position: absolute;
-  bottom: 66px;
-  max-width: 230px;
-  padding: 7px 10px;
-  border-radius: 10px;
-  background: var(--vscode-editorHoverWidget-background, var(--vscode-editor-background));
-  border: 1px solid var(--vscode-editorHoverWidget-border, var(--border));
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
-  font-size: 0.92em;
-  line-height: 1.35;
-  z-index: 5;
-  cursor: pointer;
-  animation: pop 0.18s ease-out;
-}
-.bubble-hint { margin-top: 4px; font-size: 0.85em; color: var(--muted); }
-@keyframes pop { from { transform: scale(0.8); opacity: 0; } to { transform: scale(1); opacity: 1; } }
-
-.panda { position: absolute; bottom: 4px; left: 20px; width: 46px; height: 56px; cursor: pointer; --white: #f7f7f2; --black: #26262b; }
-.panda > div, .panda .head > div { position: absolute; }
-.panda .ear { top: 0; width: 15px; height: 15px; background: var(--black); border-radius: 50%; }
-.panda .ear.l { left: 4px; }
-.panda .ear.r { right: 4px; }
-.panda .head { left: 3px; top: 4px; width: 40px; height: 32px; background: var(--white); border-radius: 50% 50% 46% 46%; box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.25); z-index: 2; }
-.panda .patch { top: 11px; width: 11px; height: 13px; background: var(--black); border-radius: 50%; }
-.panda .patch.l { left: 7px; transform: rotate(18deg); }
-.panda .patch.r { right: 7px; transform: rotate(-18deg); }
-.panda .eye { left: 3px; top: 4px; width: 4px; height: 4px; background: #fff; border-radius: 50%; animation: eyeblink 4.5s infinite; }
-@keyframes eyeblink { 0%, 94%, 100% { transform: scaleY(1); } 96% { transform: scaleY(0.1); } }
-.panda .nose { left: 17px; top: 21px; width: 6px; height: 4px; background: var(--black); border-radius: 50% 50% 60% 60%; }
-.panda .mouth { left: 16px; top: 24px; width: 8px; height: 4px; border-bottom: 1.5px solid var(--black); border-radius: 0 0 50% 50%; }
-.panda .blush { top: 22px; width: 6px; height: 3px; background: #f4a6b5; border-radius: 50%; opacity: 0.8; }
-.panda .blush.l { left: 4px; }
-.panda .blush.r { right: 4px; }
-.panda .body { left: 8px; top: 30px; width: 30px; height: 20px; background: var(--white); border-radius: 45% 45% 40% 40%; box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.25); z-index: 1; }
-.panda .arm { top: 2px; width: 9px; height: 15px; background: var(--black); border-radius: 50%; }
-.panda .arm.l { left: -3px; transform-origin: top center; }
-.panda .arm.r { right: -3px; transform-origin: top center; }
-.panda .leg { bottom: 0; width: 11px; height: 9px; background: var(--black); border-radius: 50% 50% 40% 40%; }
-.panda .leg.l { left: 10px; }
-.panda .leg.r { right: 10px; }
-.panda .zzz, .panda .dots { display: none; }
-
-.panda.idle .head { animation: bob 2.4s ease-in-out infinite; }
-@keyframes bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(1.5px); } }
-
-.panda.walk-right, .panda.walk-left { animation: waddle 0.5s ease-in-out infinite; }
-.panda.walk-left { transform: scaleX(-1); }
-.panda.walk-right .leg.l, .panda.walk-left .leg.l { animation: step 0.5s infinite; }
-.panda.walk-right .leg.r, .panda.walk-left .leg.r { animation: step 0.5s infinite 0.25s; }
-@keyframes waddle { 0%, 100% { rotate: -4deg; } 50% { rotate: 4deg; } }
-@keyframes step { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-3px); } }
-
-.panda.sit .body { top: 33px; }
-.panda.sit .leg { bottom: 2px; height: 8px; width: 13px; }
-.panda.sit .arm.l { transform: rotate(-25deg); }
-
-.panda.sleep .head { top: 12px; animation: breathe 3s ease-in-out infinite; }
-.panda.sleep .eye { height: 1px; top: 6px; animation: none; }
-.panda.sleep .ear { top: 8px; }
-.panda.sleep .zzz { display: block; right: -10px; top: -8px; color: var(--muted); font-size: 11px; font-weight: 600; animation: float 2.6s ease-in-out infinite; }
-.panda.sleep .zzz span { font-size: 0.8em; margin-left: 1px; }
-@keyframes breathe { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(1px) scale(1.02); } }
-@keyframes float { 0% { transform: translateY(4px); opacity: 0; } 40% { opacity: 1; } 100% { transform: translateY(-8px); opacity: 0; } }
-
-.panda.think .dots { display: flex; gap: 3px; right: -14px; top: -6px; }
-.panda.think .dots span { width: 5px; height: 5px; border-radius: 50%; background: var(--muted); animation: blink 1.2s infinite; }
-.panda.think .dots span:nth-child(2) { animation-delay: 0.2s; }
-.panda.think .dots span:nth-child(3) { animation-delay: 0.4s; }
-.panda.think .arm.r { transform: rotate(-150deg); top: -4px; }
-.panda.think .head { transform: rotate(-6deg); }
-
-.panda.talk .mouth { animation: chatter 0.25s infinite alternate; }
-.panda.talk .arm.r { animation: gesture 0.9s ease-in-out infinite; }
-@keyframes chatter { from { height: 2px; } to { height: 5px; border-radius: 0 0 50% 50%; background: #c44; } }
-@keyframes gesture { 0%, 100% { transform: rotate(0); } 50% { transform: rotate(-40deg); } }
-
-.panda.cheer { animation: hop 0.45s ease-out 3; }
-.panda.cheer .arm { transform: rotate(180deg); top: -6px; }
-@keyframes hop { 0%, 100% { transform: translateY(0); } 40% { transform: translateY(-12px); } }
-
-.panda.wag .head { animation: shake 0.3s ease-in-out 4; }
-@keyframes shake { 0%, 100% { transform: rotate(0); } 25% { transform: rotate(-10deg); } 75% { transform: rotate(10deg); } }
-.panda.wag .arm.r { transform: rotate(-120deg); animation: gesture 0.3s ease-in-out 4; }
-
-.panda.alert { animation: hop 0.35s ease-out 2; }
-.panda.alert .ear { transform: translateY(-2px); }
-.panda.alert .arm.r { transform: rotate(-160deg); top: -6px; }
-
-@media (prefers-reduced-motion: reduce) {
-  .panda, .panda * { animation: none !important; }
-}
-
-/* visualize tab */
-.viz-controls { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 10px; }
-.viz-controls label { display: flex; flex-direction: column; gap: 2px; font-size: 0.9em; color: var(--muted); }
-.viz-controls label.check { flex-direction: row; align-items: center; gap: 6px; color: var(--vscode-foreground); }
-.viz-controls label:first-child { grid-column: 1 / -1; }
-select {
-  font: inherit;
-  color: var(--vscode-dropdown-foreground);
-  background: var(--vscode-dropdown-background);
-  border: 1px solid var(--vscode-dropdown-border, var(--border));
-  border-radius: 4px;
-  padding: 3px;
-}
-.viz-buttons { justify-content: flex-start; margin: 8px 0; }
-.canvas { width: 100%; height: 170px; background: var(--vscode-editor-background); border: 1px solid var(--border); border-radius: var(--radius); flex-shrink: 0; }
-.bar { fill: var(--bar); transition: fill 0.15s; }
-.bar.compare { fill: var(--compare); }
-.bar.swap { fill: var(--swap); }
-.bar.pivot { fill: var(--pivot); }
-.bar.sorted { fill: var(--sorted); }
-.bar.dim { opacity: 0.25; }
-.bar-label, .node-label { fill: var(--vscode-foreground); font-size: 10px; text-anchor: middle; font-family: var(--vscode-editor-font-family); }
-.edge { stroke: var(--muted); stroke-width: 1.5; }
-.node { fill: var(--vscode-editor-background); stroke: var(--bar); stroke-width: 2; }
-.node.compare { fill: var(--compare); stroke: var(--compare); }
-.caption { min-height: 2.6em; margin: 8px 0 4px; line-height: 1.35; }
-.predict { border: 1px solid var(--compare); border-radius: var(--radius); padding: 8px; margin-bottom: 6px; }
-.predict .q { margin-bottom: 6px; }
-.predict .q.good { color: var(--good); margin: 0; }
-.predict .q.bad { color: var(--bad); margin: 0; }
-.predict .row { justify-content: flex-start; }
-.pseudo {
-  font-family: var(--vscode-editor-font-family);
-  font-size: 0.9em;
-  background: var(--vscode-textCodeBlock-background);
-  padding: 6px 8px;
-  border-radius: 4px;
-  margin: 4px 0 6px;
-  white-space: pre-wrap;
-}
-.pseudo span { display: inline; }
-.pseudo span.on { background: var(--vscode-editor-selectionBackground); outline: 1px solid var(--compare); }
-
-/* progress tab */
-.stats { display: grid; grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 6px; }
-.stat { border: 1px solid var(--border); border-radius: var(--radius); padding: 8px; }
-.stat .n { font-size: 1.5em; font-weight: 600; }
-.stat .l { font-size: 0.85em; color: var(--muted); }
-.concept { display: grid; grid-template-columns: minmax(80px, 40%) 1fr 24px; gap: 6px; align-items: center; margin: 3px 0; font-size: 0.92em; }
-.bar-bg { height: 6px; background: var(--border); border-radius: 3px; overflow: hidden; }
-.bar-fg { display: block; height: 100%; background: var(--sorted); }
-#resetProgress { align-self: flex-start; margin: 12px 0; }
-
 /* icons */
 .codicon { vertical-align: text-bottom; margin-right: 5px; }
 button .codicon { font-size: 14px; }
-.tab .codicon, .pips .codicon { margin-right: 2px; }
+.pips .codicon { margin-right: 2px; }
 .pips .codicon { font-size: 10px; color: var(--accent); vertical-align: middle; }
-.stat .l .codicon { color: var(--swap); font-size: 12px; margin-right: 3px; }
-.predict .q.good .codicon { color: var(--good); }
-.predict .q.bad .codicon { color: var(--bad); }
-.predict .q .codicon-lightbulb { color: var(--compare); }
 .msg.error .codicon-warning { color: var(--warn); }
 .msg blockquote.guard { color: var(--vscode-foreground); border-left-color: var(--warn); }
 .msg blockquote.guard .codicon, .guard-note .codicon { color: var(--warn); }
-
-/* visualize: segmented toggle */
-.seg { display: flex; border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; margin-bottom: 8px; flex-shrink: 0; }
-.seg-btn { flex: 1; border: none; border-radius: 0; background: none; color: var(--muted); padding: 5px 6px; }
-.seg-btn:hover:not(:disabled) { background: var(--vscode-list-hoverBackground); }
-.seg-btn.active { background: var(--vscode-button-secondaryBackground); color: var(--vscode-foreground); }
-.viz-pane { display: none; flex-direction: column; }
-.viz-pane.active { display: flex; }
-.viz-ask { margin: 6px 0; }
-.viz-ask .check { display: flex; align-items: center; gap: 4px; }
-.examples { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; margin-bottom: 8px; }
-.chip {
-  font-size: 0.88em;
-  padding: 2px 8px;
-  border-radius: 10px;
-  color: var(--vscode-foreground);
-  background: var(--vscode-badge-background, var(--vscode-button-secondaryBackground));
-  border: 1px solid var(--border);
-}
-.chip:hover:not(:disabled) { background: var(--vscode-list-hoverBackground); }
-.scene-status { padding: 6px 8px; border: 1px solid var(--border); border-radius: var(--radius); margin-bottom: 8px; }
-.scene-status.error { border-color: var(--warn); }
-.scene-status .codicon { color: var(--muted); }
-.scene-status.error .codicon-warning { color: var(--warn); }
-
-/* scene player */
-.scene-title { font-weight: 600; margin: 4px 0 6px; }
-.scene-stage {
-  position: relative;
-  min-height: 120px;
-  background: var(--vscode-editor-background);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  overflow: hidden;
-  flex-shrink: 0;
-}
-.scene-svg { position: absolute; inset: 0; pointer-events: none; overflow: visible; }
-.scene-link { stroke: var(--muted); stroke-width: 1.6; fill: none; }
-.scene-link.hl { stroke: var(--compare); stroke-width: 2.2; }
-.arrow-head { fill: var(--muted); }
-.scene-link-label { fill: var(--muted); font-size: 10px; text-anchor: middle; font-family: var(--vscode-editor-font-family); }
-.scene-label, .scene-node, .scene-ptr, .stack-base { position: absolute; left: 0; top: 0; will-change: transform; }
-.scene-label { font-size: 0.8em; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); white-space: nowrap; }
-.scene-node {
-  height: 30px;
-  line-height: 28px;
-  text-align: center;
-  font-family: var(--vscode-editor-font-family);
-  font-size: 12px;
-  border: 1.5px solid var(--bar);
-  border-radius: 5px;
-  background: var(--vscode-sideBar-background);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  padding: 0 3px;
-  transition: opacity 0.25s, background 0.2s, border-color 0.2s;
-}
-.scene-node.round { border-radius: 15px; }
-.scene-node.bucket { border-style: dashed; color: var(--muted); }
-.scene-node.var { text-align: left; padding-left: 8px; border-color: var(--border); }
-.scene-node.hl { border-color: var(--compare); background: color-mix(in srgb, var(--compare) 22%, transparent); }
-.scene-node.changed { animation: changed 0.7s ease-out; }
-@keyframes changed { from { background: color-mix(in srgb, var(--swap) 55%, transparent); } }
-.scene-ptr {
-  font-size: 11px;
-  font-family: var(--vscode-editor-font-family);
-  color: var(--pivot);
-  white-space: nowrap;
-  font-weight: 600;
-  transition: opacity 0.25s;
-}
-.scene-ptr .codicon { font-size: 10px; margin: 0; vertical-align: middle; }
-.scene-ptr.null { color: var(--muted); font-weight: normal; }
-.stack-base { width: 84px; height: 0; border-top: 2px solid var(--muted); }
-.entering { animation: fade-in 0.3s ease-out; }
-@keyframes fade-in { from { opacity: 0; } }
-.leaving { opacity: 0; }
-.scene-controls { margin: 6px 0 10px; }
 
 /* line chips in replies */
 .line-chip {
@@ -389,7 +157,3 @@ button .codicon { font-size: 14px; }
 .line-chip .codicon { font-size: 12px; margin-right: 2px; vertical-align: -2px; }
 .line-chip:hover:not(:disabled) { background: color-mix(in srgb, var(--vscode-textLink-foreground) 22%, transparent); }
 
-/* the panda's away sign */
-.away-sign { position: absolute; left: 10px; right: 10px; bottom: 10px; display: flex; flex-direction: column; gap: 6px; font-size: 0.9em; color: var(--muted); }
-.away-sign .codicon-location { color: var(--vscode-textLink-foreground); }
-.away-sign button { align-self: flex-start; }

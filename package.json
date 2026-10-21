@@ -1,8 +1,8 @@
 {
   "name": "senior-dev-mentor",
   "displayName": "Senior Dev Mentor",
-  "description": "An open-source AI mentor that teaches you to code instead of coding for you. Socratic hints, code reviews that ask questions, visualizations of any data structure, and a panda that walks to the line you should look at.",
-  "version": "0.2.0",
+  "description": "An open-source AI mentor that teaches you to code instead of coding for you. A panda lives in your editor and walks to the lines worth a look, draws any data structure on its board, and wraps up what you learned.",
+  "version": "0.3.0",
   "publisher": "senior-dev-mentor",
   "license": "MIT",
   "repository": {
@@ -70,6 +70,21 @@
         "category": "Mentor"
       },
       {
+        "command": "seniorDevMentor.showMe",
+        "title": "Show Me (draw it on the panda's board)",
+        "category": "Mentor"
+      },
+      {
+        "command": "seniorDevMentor.wrapUp",
+        "title": "Wrap Up This Session",
+        "category": "Mentor"
+      },
+      {
+        "command": "seniorDevMentor.newProblem",
+        "title": "Start a New Problem (reset hints)",
+        "category": "Mentor"
+      },
+      {
         "command": "seniorDevMentor.setApiKey",
         "title": "Set Anthropic API Key",
         "category": "Mentor"
@@ -77,11 +92,6 @@
       {
         "command": "seniorDevMentor.clearApiKey",
         "title": "Remove Anthropic API Key",
-        "category": "Mentor"
-      },
-      {
-        "command": "seniorDevMentor.newProblem",
-        "title": "Start a New Problem (reset hints)",
         "category": "Mentor"
       },
       {
@@ -113,6 +123,10 @@
         {
           "command": "seniorDevMentor.explainError",
           "group": "seniorDevMentor@3"
+        },
+        {
+          "command": "seniorDevMentor.showMe",
+          "group": "seniorDevMentor@4"
         }
       ],
       "commandPalette": [
@@ -178,12 +192,12 @@
         "seniorDevMentor.mascot": {
           "type": "boolean",
           "default": true,
-          "description": "Show the animated panda mascot (in the sidebar and in the editor)."
+          "description": "Show the panda in your code editor."
         },
-        "seniorDevMentor.editorPanda": {
+        "seniorDevMentor.pandaFollowsCursor": {
           "type": "boolean",
           "default": true,
-          "description": "Let the panda walk into your editor to point at lines the mentor talks about. It only scrolls your editor when you asked for a review, hint or error explanation."
+          "description": "The panda strolls over to the line you're working on when you pause."
         }
       }
     }

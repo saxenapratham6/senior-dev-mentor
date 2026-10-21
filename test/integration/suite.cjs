@@ -42,11 +42,6 @@ exports.run = async function () {
     assert.ok(editor.visibleRanges.some((r) => r.contains(new vscode.Position(target, 0))), "target is on screen");
   });
 
-  if (process.env.MENTOR_IT_SHOT) {
-    // Optional: capture the window while the panda sits at the line (needs screen-recording permission).
-    await sleep(800);
-    require("node:child_process").spawnSync("screencapture", ["-x", process.env.MENTOR_IT_SHOT]);
-  }
 
   await check("Next stop walks back up to the second line", async () => {
     await vscode.commands.executeCommand("seniorDevMentor.pandaNext");
@@ -82,6 +77,23 @@ exports.run = async function () {
     const again = await panda.tour(doc.uri, [{ line: 80, note: "x" }], { reveal: false });
     assert.equal(again, false);
     assert.ok(far === true || far === false);
+  });
+
+  await check("after you pause, the panda strolls to your line", async () => {
+    editor.selection = new vscode.Selection(10, 0, 10, 0);
+    await sleep(2600); // follow delay plus the walk
+    assert.equal(panda.atLine, 10);
+  });
+
+  await check("the panda steps out while its board is open and comes back after", async () => {
+    api.board.show({ type: "examples" });
+    await sleep(800);
+    assert.equal(api.board.isOpen, true);
+    assert.equal(panda.isOut, true);
+    api.board.dispose();
+    await sleep(300);
+    assert.equal(api.board.isOpen, false);
+    assert.equal(panda.isOut, false);
   });
 
   console.log("\n" + results.join("\n") + "\n");

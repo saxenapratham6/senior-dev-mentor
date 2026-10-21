@@ -1,4 +1,5 @@
 import * as vscode from "vscode";
+import * as path from "path";
 import { classifyRequest, redirectMessage, SolutionGuard, DEFAULT_GUARD } from "./guardrails";
 import { HintLadder, hashCode, HINT_LEVELS } from "./hintLadder";
 import { actionPreamble, MentorAction, systemPrompt } from "./prompts";
@@ -9,6 +10,20 @@ import { AnthropicProvider } from "./providers/anthropic";
 import { OllamaProvider } from "./providers/ollama";
 import { normalizeScene, scenePrompt, SceneSchema, extractLineRefs } from "./scene";
 import { EditorPanda, PandaWhereabouts } from "./editorPanda";
+import { PandaBoard } from "./board";
+import {
+  SessionLog,
+  newSessionLog,
+  isEmptySession,
+  sessionStats,
+  SummarySchema,
+  normalizeSummary,
+  summaryPrompt,
+  summaryInput,
+  summaryMarkdown,
+  Summary,
+  SessionStats,
+} from "./summary";
 
 export const SECRET_KEY = "seniorDevMentor.anthropicApiKey";
 const MAX_TURNS = 12;
@@ -16,15 +31,13 @@ const MAX_TURNS = 12;
 type FromWebview =
   | { type: "ready" }
   | { type: "ask"; action: MentorAction; text: string }
+  | { type: "showMe"; text: string }
+  | { type: "wrapUp" }
   | { type: "stop" }
   | { type: "newProblem" }
   | { type: "setApiKey" }
   | { type: "openSettings" }
-  | { type: "prediction"; right: boolean }
-  | { type: "resetProgress" }
-  | { type: "visitLine"; line: number; note: string }
-  | { type: "pandaDismiss" }
-  | { type: "visualize"; prompt: string; useSelection: boolean };
+  | { type: "visitLine"; line: number; note: string };
 
 // Label and Codicon (https://microsoft.github.io/vscode-codicons/) for each action.
 const ACTION_LABELS: Record<MentorAction, { text: string; icon: string }> = {
@@ -37,6 +50,9 @@ const ACTION_LABELS: Record<MentorAction, { text: string; icon: string }> = {
   teach: { text: "Teach me", icon: "book" },
 };
 
+// "show me how a stack works", "visualize my loop", "draw a BST" go to the board.
+const SHOW_ME = /^\s*(show me|visuali[sz]e|draw|animate|walk me through|let me see)\b/i;
+
 const icon = (name: string) => `<i class="codicon codicon-${name}" aria-hidden="true"></i>`;
 
 export class MentorViewProvider implements vscode.WebviewViewProvider {
@@ -45,10 +61,13 @@ export class MentorViewProvider implements vscode.WebviewViewProvider {
   private ladder = new HintLadder();
   private redirects = 0;
   private abort?: AbortController;
+  private sideAbort?: AbortController; // visualizations and wrap-ups
   private lastEditor?: vscode.TextEditor;
   private replyId = 0;
   private pending: unknown[] = [];
-  private sceneAbort?: AbortController;
+  private session: SessionLog = newSessionLog();
+  private lastSummary?: { summary: Summary; stats: SessionStats };
+  readonly board: PandaBoard;
 
   constructor(
     private readonly ctx: vscode.ExtensionContext,
@@ -56,9 +75,22 @@ export class MentorViewProvider implements vscode.WebviewViewProvider {
     private readonly panda: EditorPanda,
   ) {
     this.lastEditor = vscode.window.activeTextEditor;
+    this.board = new PandaBoard(ctx.extensionUri, {
+      onOpen: () => void this.panda.stepOut(),
+      onClose: () => this.panda.stepIn(),
+      onPrediction: (right) => void this.recordPrediction(right),
+      onSaveNotes: () => void this.saveNotes(),
+      onFix: (action) => void vscode.commands.executeCommand(action === "setApiKey" ? "seniorDevMentor.setApiKey" : "workbench.action.openSettings", action === "setApiKey" ? undefined : "seniorDevMentor"),
+      onExample: (name) => this.log("visualized", name, () => this.session.visualized.push(name)),
+    });
     ctx.subscriptions.push(
+      this.board,
       vscode.window.onDidChangeActiveTextEditor((e) => {
-        if (e) this.lastEditor = e;
+        if (e && e.document.uri.scheme === "file") {
+          this.lastEditor = e;
+          const name = path.basename(e.document.fileName);
+          if (!this.session.files.includes(name)) this.session.files.push(name);
+        }
       }),
     );
   }
@@ -80,29 +112,25 @@ export class MentorViewProvider implements vscode.WebviewViewProvider {
 
   /** A save nudge. `walked` is true when the panda already went to the line in the editor. */
   nudge(question: string, line: number, fileName: string, walked: boolean): void {
-    this.post({ type: "nudge", question, line, fileName, walked });
+    this.log("nudge", `${fileName}:${line + 1} ${question}`);
+    if (!walked) this.post({ type: "nudge", question, line, fileName });
   }
 
-  /** The editor panda moved (or came home); the sidebar panda mirrors it. */
   pandaMoved(where: PandaWhereabouts | null): void {
-    this.post(where ? { type: "pandaAway", ...where } : { type: "pandaBack" });
+    if (where) this.session.pandaStops++;
   }
 
   /** Send the panda to lines of the file the student is working on. */
   async visitLines(stops: { line: number; note: string }[]): Promise<boolean> {
     const ed = this.lastEditor;
-    if (!ed || ed.document.isClosed || !this.editorPandaEnabled()) return false;
+    if (!ed || ed.document.isClosed) return false;
     return this.panda.tour(ed.document.uri, stops, { reveal: true, viewColumn: ed.viewColumn });
-  }
-
-  editorPandaEnabled(): boolean {
-    const cfg = vscode.workspace.getConfiguration("seniorDevMentor");
-    return cfg.get<boolean>("mascot", true) && cfg.get<boolean>("editorPanda", true);
   }
 
   newProblem(): void {
     this.ladder.reset();
     this.turns = [];
+    this.log("newProblem", "");
     this.post({ type: "cleared" });
   }
 
@@ -115,15 +143,26 @@ export class MentorViewProvider implements vscode.WebviewViewProvider {
     else this.pending.push(msg);
   }
 
+  private log(kind: string, detail: string, also?: () => void): void {
+    this.session.events.push({ at: Date.now(), kind, detail });
+    also?.();
+  }
+
   private async onMessage(m: FromWebview): Promise<void> {
     switch (m.type) {
       case "ready":
         await this.sendConfig();
-        this.sendProgress();
         for (const p of this.pending.splice(0)) this.post(p);
         break;
       case "ask":
-        await this.ask(m.action, m.text);
+        if (m.action === "chat" && SHOW_ME.test(m.text)) await this.showMe(m.text);
+        else await this.ask(m.action, m.text);
+        break;
+      case "showMe":
+        await this.showMe(m.text);
+        break;
+      case "wrapUp":
+        await this.wrapUp();
         break;
       case "stop":
         this.abort?.abort();
@@ -137,32 +176,14 @@ export class MentorViewProvider implements vscode.WebviewViewProvider {
       case "openSettings":
         await vscode.commands.executeCommand("workbench.action.openSettings", "seniorDevMentor");
         break;
-      case "prediction":
-        await this.progress.update((p) => {
-          p.predictionsTotal++;
-          if (m.right) p.predictionsRight++;
-        });
-        this.sendProgress();
-        break;
-      case "resetProgress":
-        await this.progress.reset();
-        this.sendProgress();
-        break;
       case "visitLine":
         if (!(await this.visitLines([{ line: m.line - 1, note: m.note }]))) {
-          // No editor panda: just jump to the line.
           const ed = this.lastEditor;
           if (ed) {
             const pos = new vscode.Position(Math.max(0, m.line - 1), 0);
             await vscode.window.showTextDocument(ed.document, { viewColumn: ed.viewColumn, selection: new vscode.Range(pos, pos) });
           }
         }
-        break;
-      case "pandaDismiss":
-        this.panda.dismiss();
-        break;
-      case "visualize":
-        await this.visualize(m.prompt, m.useSelection);
         break;
     }
   }
@@ -173,16 +194,9 @@ export class MentorViewProvider implements vscode.WebviewViewProvider {
     const hasKey = provider !== "anthropic" || !!(await this.ctx.secrets.get(SECRET_KEY)) || !!process.env.ANTHROPIC_API_KEY;
     this.post({
       type: "config",
-      mascot: cfg.get<boolean>("mascot", true),
       providerLabel: provider === "anthropic" ? `Claude · ${cfg.get("anthropicModel")}` : `Ollama · ${cfg.get("ollamaModel")}`,
       needsKey: !hasKey,
-      maxCodeLines: this.guardOptions().maxCodeLines,
     });
-  }
-
-  private sendProgress(): void {
-    const p = this.progress.get();
-    this.post({ type: "progress", data: p, streak: streak(p.activeDays) });
   }
 
   private guardOptions() {
@@ -203,6 +217,8 @@ export class MentorViewProvider implements vscode.WebviewViewProvider {
     );
   }
 
+  // -------------------------------------------------------------- chat
+
   private async ask(action: MentorAction, text: string): Promise<void> {
     if (this.abort) {
       this.post({ type: "mentor", text: "One thing at a time. Let me finish this answer first (or press **Stop**)." });
@@ -216,8 +232,9 @@ export class MentorViewProvider implements vscode.WebviewViewProvider {
     const verdict = classifyRequest(text);
     if (verdict.kind !== "allowed") {
       await this.progress.update((p) => p.solutionRequestsRedirected++);
-      this.post({ type: "mentor", text: redirectMessage(verdict, this.redirects++), mood: "wag" });
-      this.sendProgress();
+      this.log("redirected", text, () => this.session.redirected++);
+      this.post({ type: "mentor", text: redirectMessage(verdict, this.redirects++) });
+      this.panda.say("Nice try! Let's figure it out together instead.", "talk");
       return;
     }
 
@@ -236,12 +253,14 @@ export class MentorViewProvider implements vscode.WebviewViewProvider {
     if (action === "hint" && code) {
       const decision = this.ladder.request(code.problemKey, hashCode(code.fullText), text);
       if (!decision.ok) {
-        this.post({ type: "mentor", text: decision.message, mood: decision.reason === "ladder-done" ? "cheer" : "think" });
+        this.post({ type: "mentor", text: decision.message });
+        this.panda.say(decision.reason === "ladder-done" ? "You've got this. The last step is yours!" : "Show me some thinking first!", decision.reason === "ladder-done" ? "cheer" : "talk");
         return;
       }
       preambleExtra = `${decision.level + 1} of ${HINT_LEVELS.length} (${decision.name}). ${decision.instruction}`;
       this.post({ type: "hintLevel", level: decision.level + 1, total: HINT_LEVELS.length, name: decision.name });
       await this.progress.update((p) => p.hintsByLevel[decision.level]++);
+      this.session.hints[decision.level]++;
     }
 
     const content = this.buildUserContent(action, text, code, preambleExtra);
@@ -251,6 +270,11 @@ export class MentorViewProvider implements vscode.WebviewViewProvider {
       else if (action === "quiz") p.quizzes++;
       else if (action !== "hint") p.questions++;
     });
+    if (action === "review") this.session.reviews++;
+    else if (action === "checkPlan") this.session.plans.push(text);
+    else if (action === "quiz") this.session.quizzes++;
+    else if (action !== "hint") this.session.questions++;
+    this.log(action, action === "chat" || action === "checkPlan" ? text : code?.fileName ?? "");
     await this.streamReply(content, action, code);
   }
 
@@ -271,6 +295,7 @@ export class MentorViewProvider implements vscode.WebviewViewProvider {
     this.abort = abort;
     this.turns.push({ role: "user", content: userContent });
     this.post({ type: "start", id });
+    this.panda.think(true);
 
     let shown = "";
     try {
@@ -287,13 +312,16 @@ export class MentorViewProvider implements vscode.WebviewViewProvider {
       if (rest) this.post({ type: "delta", id, text: rest });
       this.turns.push({ role: "assistant", content: shown.trim() || "(no reply)" });
       this.post({ type: "done", id, hidden: guard.stats.hiddenBlocks });
+      this.session.codeHidden += guard.stats.hiddenBlocks;
+      for (const c of guard.concepts) this.session.concepts[c] = (this.session.concepts[c] ?? 0) + 1;
       await this.progress.update((p) => {
         p.codeHidden += guard.stats.hiddenBlocks;
         for (const c of guard.concepts) p.concepts[c] = (p.concepts[c] ?? 0) + 1;
       });
-      this.sendProgress();
-      await this.sendPandaToLines(shown, action, code);
+      this.panda.think(false);
+      if (!(await this.sendPandaToLines(shown, action, code))) this.panda.say("My answer is in the chat.", "cheer", 3000);
     } catch (err) {
+      this.panda.think(false);
       this.turns.pop(); // drop the unanswered question so history stays valid
       if (abort.signal.aborted) {
         this.post({ type: "done", id, hidden: guard.stats.hiddenBlocks, stopped: true });
@@ -308,58 +336,125 @@ export class MentorViewProvider implements vscode.WebviewViewProvider {
   }
 
   /** After a review, hint or error explanation, the panda walks to the lines the reply points at. */
-  private async sendPandaToLines(reply: string, action: MentorAction, code: CodeContext | undefined): Promise<void> {
-    if (!code || !["review", "hint", "explainError"].includes(action)) return;
+  private async sendPandaToLines(reply: string, action: MentorAction, code: CodeContext | undefined): Promise<boolean> {
+    if (!code || !["review", "hint", "explainError"].includes(action)) return false;
     const doc = this.lastEditor?.document;
-    if (!doc || doc.uri.toString() !== code.problemKey) return;
+    if (!doc || doc.uri.toString() !== code.problemKey) return false;
     let stops = extractLineRefs(reply, doc.lineCount).map((r) => ({ line: r.line - 1, note: r.note }));
     if (!stops.length && action === "explainError" && code.diagnosticLines.length) {
       const firstParagraph = reply.split(/\n\s*\n/).find((p) => p.trim()) ?? "";
       stops = [{ line: code.diagnosticLines[0], note: firstParagraph.replace(/\[\[L(\d+)\]\]/g, "line $1") }];
     }
-    if (stops.length) await this.visitLines(stops);
+    return stops.length ? this.visitLines(stops) : false;
   }
 
-  /** "Visualize anything": ask the model for a scene, check it, send it to the player. */
-  private async visualize(prompt: string, useSelection: boolean): Promise<void> {
-    this.sceneAbort?.abort();
+  // -------------------------------------------------------------- show me (the panda's board)
+
+  /**
+   * "Show me": the panda draws on its board. With text, it draws that idea;
+   * with code selected, it traces the code; with neither, it offers examples.
+   */
+  private async showMe(text: string): Promise<void> {
+    const prompt = text.replace(SHOW_ME, "").trim();
+    const ed = this.lastEditor;
+    const useSelection = !prompt && !!ed && !ed.selection.isEmpty;
+    if (!prompt && !useSelection) {
+      this.board.show({ type: "examples" });
+      return;
+    }
+    if (text.trim()) this.post({ type: "user", label: "Show me", icon: "sparkle", text: prompt });
+
     const verdict = classifyRequest(prompt);
     if (verdict.kind !== "allowed") {
-      await this.progress.update((p) => p.solutionRequestsRedirected++);
-      this.post({ type: "sceneError", message: "I can draw how something works, but not hand over a solution. Try describing the idea, like \"how does reversing a linked list work?\"" });
+      this.log("redirected", prompt, () => this.session.redirected++);
+      this.board.show({ type: "error", message: "I can draw how something works, but not hand over a solution. Try describing the idea, like \"how does reversing a linked list work?\"" });
       return;
     }
-    const code = useSelection ? codeContext(this.lastEditor) : undefined;
-    if (useSelection && !code) {
-      this.post({ type: "sceneError", message: "Open your file and select the code you want to see run, then try again." });
-      return;
-    }
-    if (!prompt.trim() && !code) {
-      this.post({ type: "sceneError", message: "Describe what you want to see, or pick an example." });
-      return;
-    }
+    const code = useSelection ? codeContext(ed) : undefined;
     const user = code
-      ? `Trace this code of mine step by step with a small example input and draw the data structures it builds or changes.${prompt.trim() ? ` What I want to see: ${prompt.trim()}` : ""}\n\n${formatContext(code)}`
-      : `Visualize: ${prompt.trim()}`;
+      ? `Trace this code of mine step by step with a small example input and draw the data structures it builds or changes.\n\n${formatContext(code)}`
+      : `Visualize: ${prompt}`;
 
+    this.sideAbort?.abort();
     const abort = new AbortController();
-    this.sceneAbort = abort;
-    this.post({ type: "sceneLoading" });
+    this.sideAbort = abort;
+    this.board.show({ type: "loading", text: code ? `Tracing your code in ${code.fileName}…` : `Drawing "${prompt}"…` });
+    this.post({ type: "mentor", text: "I'm drawing it on my board, over there →" });
     try {
       const raw = await (await this.provider()).json(scenePrompt(), user, SceneSchema, abort.signal);
       if (abort.signal.aborted) return;
       const scene = normalizeScene(raw, this.guardOptions());
-      this.post({ type: "scene", scene });
+      this.board.show({ type: "scene", scene });
       await this.progress.update((p) => p.visualizations++);
-      this.sendProgress();
+      this.log("visualized", scene.title, () => this.session.visualized.push(scene.title));
     } catch (err) {
       if (abort.signal.aborted) return;
-      const message = err instanceof Error ? err.message : String(err);
-      this.post({ type: "sceneError", message, action: err instanceof ProviderError ? err.action : undefined });
+      this.board.show({ type: "error", message: err instanceof Error ? err.message : String(err), action: err instanceof ProviderError ? err.action : undefined });
     } finally {
-      if (this.sceneAbort === abort) this.sceneAbort = undefined;
+      if (this.sideAbort === abort) this.sideAbort = undefined;
     }
   }
+
+  /** "Show me" from the editor's context menu or the command palette. */
+  async showMeFromEditor(): Promise<void> {
+    await this.showMe("");
+  }
+
+  private async recordPrediction(right: boolean): Promise<void> {
+    this.session.predictionsTotal++;
+    if (right) this.session.predictionsRight++;
+    await this.progress.update((p) => {
+      p.predictionsTotal++;
+      if (right) p.predictionsRight++;
+    });
+  }
+
+  // -------------------------------------------------------------- wrap up
+
+  /** The panda presents what happened this session on its board, then a new session starts. */
+  async wrapUp(): Promise<void> {
+    if (isEmptySession(this.session)) {
+      this.post({ type: "mentor", text: "Nothing to wrap up yet. Check a plan, ask a question or try a visualization first, and I'll keep track." });
+      return;
+    }
+    this.sideAbort?.abort();
+    const abort = new AbortController();
+    this.sideAbort = abort;
+    this.board.show({ type: "loading", text: "Looking back at what you did…" });
+    this.post({ type: "mentor", text: "Wrapping up. The panda is putting your session on its board →" });
+    try {
+      const raw = await (await this.provider()).json(summaryPrompt(), summaryInput(this.session, this.turns), SummarySchema, abort.signal);
+      if (abort.signal.aborted) return;
+      const summary = normalizeSummary(raw, this.guardOptions());
+      const stats = sessionStats(this.session, Date.now(), streak(this.progress.get().activeDays));
+      this.lastSummary = { summary, stats };
+      this.board.show({ type: "summary", summary, stats });
+      this.session = newSessionLog();
+    } catch (err) {
+      if (abort.signal.aborted) return;
+      this.board.show({ type: "error", message: err instanceof Error ? err.message : String(err), action: err instanceof ProviderError ? err.action : undefined });
+    } finally {
+      if (this.sideAbort === abort) this.sideAbort = undefined;
+    }
+  }
+
+  private async saveNotes(): Promise<void> {
+    if (!this.lastSummary) return;
+    const day = new Date().toISOString().slice(0, 10);
+    const folder = vscode.workspace.workspaceFolders?.[0]?.uri;
+    const target = await vscode.window.showSaveDialog({
+      defaultUri: folder ? vscode.Uri.joinPath(folder, `mentor-notes-${day}.md`) : undefined,
+      filters: { Markdown: ["md"] },
+      title: "Save your wrap-up as notes",
+    });
+    if (!target) return;
+    await vscode.workspace.fs.writeFile(target, Buffer.from(summaryMarkdown(this.lastSummary.summary, this.lastSummary.stats)));
+    void vscode.window.showInformationMessage(`Saved your notes to ${path.basename(target.fsPath)}.`, "Open").then((pick) => {
+      if (pick) void vscode.window.showTextDocument(target);
+    });
+  }
+
+  // -------------------------------------------------------------- page
 
   private html(webview: vscode.Webview, media: vscode.Uri): string {
     const nonce = [...Array(32)].map(() => Math.floor(Math.random() * 36).toString(36)).join("");
@@ -375,138 +470,38 @@ export class MentorViewProvider implements vscode.WebviewViewProvider {
 <title>Senior Dev Mentor</title>
 </head>
 <body>
-<nav class="tabs" role="tablist">
-  <button role="tab" class="tab active" data-tab="mentor" aria-selected="true">Mentor</button>
-  <button role="tab" class="tab" data-tab="visualize" aria-selected="false">Visualize</button>
-  <button role="tab" class="tab" data-tab="progress" aria-selected="false">Progress</button>
-</nav>
-
-<section id="tab-mentor" class="panel active">
-  <div id="keyBanner" class="banner" hidden>
-    <span>Add an Anthropic API key, or use a free local model through Ollama.</span>
-    <span class="row"><button data-cmd="setApiKey">Add key</button><button class="secondary" data-cmd="openSettings">Use Ollama</button></span>
+<div id="keyBanner" class="banner" hidden>
+  <span>Add an Anthropic API key, or use a free local model through Ollama.</span>
+  <span class="row"><button data-cmd="setApiKey">Add key</button><button class="secondary" data-cmd="openSettings">Use Ollama</button></span>
+</div>
+<div id="log" class="log" aria-live="polite">
+  <div class="msg mentor intro">
+    <p>Hi! I won't write your code. I'll help you <b>think</b> until you can.</p>
+    <p class="muted">The panda in your editor will walk to lines worth a look. Try <b>Plan</b> before you code, and <b>Show me</b> to see an idea drawn out.</p>
   </div>
-  <div id="log" class="log" aria-live="polite">
-    <div class="msg mentor intro">
-      <p>Hi! I'm your mentor. I won't write your code. I'll help you <b>think</b> until you can write it yourself.</p>
-      <p class="muted">Start with <b>Check my plan</b> before you code, <b>Hint</b> when you're stuck, and <b>Review my attempt</b> when you have something.</p>
-    </div>
+</div>
+<div id="hintMeter" class="hint-meter" hidden></div>
+<div class="actions" role="toolbar" aria-label="Mentor actions">
+  <button class="act" data-action="checkPlan" title="Check my plan: describe your approach in the box first">${icon("checklist")}Plan</button>
+  <button class="act" data-action="hint" title="Hint: write what you tried in the box first">${icon("lightbulb")}Hint</button>
+  <button class="act" data-action="review" title="Review my attempt: uses your selection, or the whole file">${icon("search")}Review</button>
+  <button class="act" data-action="explainError" title="Help me understand this error">${icon("bug")}Error</button>
+  <button class="act" data-action="quiz" title="Quiz me on my code">${icon("question")}Quiz</button>
+  <button class="act" id="showMe" title="Show me: draw the idea in the box, or trace your selected code, on the panda's board">${icon("sparkle")}Show me</button>
+</div>
+<form id="composer" class="composer">
+  <textarea id="input" rows="3" placeholder="Ask, describe your plan, or say what you tried…"></textarea>
+  <div class="row">
+    <span id="provider" class="muted small"></span>
+    <span class="row">
+      <button type="button" id="wrapUp" class="icon-btn" title="Wrap up: the panda summarizes this session">${icon("notebook")}</button>
+      <button type="button" id="newProblem" class="icon-btn" title="New problem: reset hints and the chat">${icon("add")}</button>
+      <button type="button" id="stop" class="secondary" hidden>${icon("debug-stop")}Stop</button>
+      <button type="submit" id="send">${icon("send")}Send</button>
+    </span>
   </div>
-  <div id="hintMeter" class="hint-meter" hidden></div>
-  <div class="actions">
-    <button data-action="checkPlan" title="Describe your approach in the box first">${icon("checklist")}Check my plan</button>
-    <button data-action="hint" title="Write what you tried in the box first">${icon("lightbulb")}Hint</button>
-    <button data-action="review" title="Uses your selection, or the whole file">${icon("search")}Review my attempt</button>
-    <button data-action="explainError">${icon("bug")}Explain error</button>
-    <button data-action="quiz">${icon("question")}Quiz me</button>
-    <button data-action="teach" title="Type a topic, like 'python dictionaries'">${icon("book")}Teach me</button>
-  </div>
-  <form id="composer" class="composer">
-    <textarea id="input" rows="3" placeholder="Ask a question, describe your plan, or say what you tried…"></textarea>
-    <div class="row">
-      <span id="provider" class="muted small"></span>
-      <span class="row">
-        <button type="button" id="newProblem" class="secondary" title="Reset hints for a new problem">${icon("add")}New problem</button>
-        <button type="button" id="stop" class="secondary" hidden>${icon("debug-stop")}Stop</button>
-        <button type="submit" id="send">${icon("send")}Send</button>
-      </span>
-    </div>
-  </form>
-  <div id="stage" class="stage" aria-hidden="true">
-    <div id="bubble" class="bubble" hidden></div>
-    <div id="panda" class="panda idle" title="Click me">
-      <div class="ear l"></div><div class="ear r"></div>
-      <div class="head"><div class="patch l"><div class="eye"></div></div><div class="patch r"><div class="eye"></div></div><div class="nose"></div><div class="mouth"></div><div class="blush l"></div><div class="blush r"></div></div>
-      <div class="body"><div class="arm l"></div><div class="arm r"></div></div>
-      <div class="leg l"></div><div class="leg r"></div>
-      <div class="zzz">z<span>z</span><span>z</span></div>
-      <div class="dots"><span></span><span></span><span></span></div>
-    </div>
-    <div id="awaySign" class="away-sign" hidden>
-      <span id="awayText"></span>
-      <button id="awayBack" class="secondary small" title="Send the panda back to the sidebar">${icon("home")}Call back</button>
-    </div>
-  </div>
-</section>
-
-<section id="tab-visualize" class="panel">
-  <div class="seg" role="tablist">
-    <button class="seg-btn active" data-viz="anything" role="tab">${icon("sparkle")}Anything</button>
-    <button class="seg-btn" data-viz="sorting" role="tab">${icon("graph")}Sorting &amp; search</button>
-  </div>
-
-  <div id="viz-anything" class="viz-pane active">
-    <textarea id="vizPrompt" rows="2" placeholder="What do you want to see? e.g. 'how a linked list gets reversed', 'collisions in a hash map', 'DFS on a graph'"></textarea>
-    <div class="row viz-ask">
-      <span class="row">
-        <button id="vizGo">${icon("sparkle")}Visualize</button>
-        <button id="vizCode" class="secondary" title="Trace your selected code (or the whole file) with a small example input">${icon("code")}My code</button>
-      </span>
-      <label class="check small"><input id="scenePredict" type="checkbox" checked> Predict</label>
-    </div>
-    <div class="examples">
-      <span class="muted small">Examples (work offline):</span>
-      <button class="chip" data-example="linkedListReverse">Reverse a linked list</button>
-      <button class="chip" data-example="stackOps">Stack</button>
-      <button class="chip" data-example="queueOps">Queue</button>
-      <button class="chip" data-example="bfs">BFS on a graph</button>
-      <button class="chip" data-example="hashChaining">Hash table</button>
-      <button class="chip" data-example="treeInorder">BST traversal</button>
-    </div>
-    <div id="sceneStatus" class="scene-status" hidden></div>
-    <div id="sceneBox" class="scene-box" hidden>
-      <div id="sceneTitle" class="scene-title"></div>
-      <div id="sceneStage" class="scene-stage"><svg id="sceneSvg" class="scene-svg"></svg></div>
-      <div id="sceneCaption" class="caption"></div>
-      <div id="scenePredictBox" class="predict" hidden></div>
-      <div class="row scene-controls">
-        <span class="row">
-          <button id="scenePrev" class="secondary" title="Previous step">${icon("arrow-left")}</button>
-          <button id="scenePlay">${icon("play")}Play</button>
-          <button id="sceneNext" class="secondary" title="Next step">${icon("arrow-right")}</button>
-        </span>
-        <span id="sceneCounter" class="muted small"></span>
-      </div>
-    </div>
-  </div>
-
-  <div id="viz-sorting" class="viz-pane">
-  <div class="viz-controls">
-    <label>Algorithm
-      <select id="algo">
-        <option value="bubble">Bubble sort</option>
-        <option value="selection">Selection sort</option>
-        <option value="insertion">Insertion sort</option>
-        <option value="merge">Merge sort</option>
-        <option value="quick">Quick sort</option>
-        <option value="binary">Binary search</option>
-        <option value="bst">Binary search tree insert</option>
-      </select>
-    </label>
-    <label>Size <input id="size" type="range" min="5" max="24" value="10"></label>
-    <label>Speed <input id="speed" type="range" min="1" max="10" value="5"></label>
-    <label class="check"><input id="predict" type="checkbox" checked> Predict mode</label>
-  </div>
-  <div class="row viz-buttons">
-    <button id="play">${icon("play")}Play</button><button id="step" class="secondary">${icon("debug-step-over")}Step</button><button id="shuffle" class="secondary">${icon("refresh")}New data</button>
-  </div>
-  <svg id="canvas" class="canvas" role="img" aria-label="Algorithm visualization"></svg>
-  <div id="vizCaption" class="caption"></div>
-  <div id="predictBox" class="predict" hidden></div>
-  <pre id="pseudo" class="pseudo"></pre>
-  <div id="vizStats" class="muted small"></div>
-  </div>
-</section>
-
-<section id="tab-progress" class="panel">
-  <div id="progressBody"></div>
-  <button id="resetProgress" class="secondary small">Reset progress</button>
-</section>
-
+</form>
 <script nonce="${nonce}" src="${uri("markdown.js")}"></script>
-<script nonce="${nonce}" src="${uri("mascot.js")}"></script>
-<script nonce="${nonce}" src="${uri("visualizer.js")}"></script>
-<script nonce="${nonce}" src="${uri("scene.js")}"></script>
 <script nonce="${nonce}" src="${uri("main.js")}"></script>
 </body>
 </html>`;
