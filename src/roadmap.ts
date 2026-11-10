@@ -2,12 +2,22 @@
 // built from Educative's catalog (checked November 2026). The plan is data;
 // progress is saved in VS Code's global state, so it survives restarts.
 
+export interface StudyGuide {
+  /** The ideas that matter most in this step. */
+  focus: string[];
+  /** Questions to answer yourself before moving on. No answers given. */
+  checkpoints: string[];
+  /** A small exercise to try in your own editor. */
+  practice: string;
+}
+
 export interface RoadmapItem {
   id: string;
   title: string;
   detail?: string;
   hours?: number;
   url?: string;
+  guide?: StudyGuide;
 }
 
 export interface RoadmapPhase {
@@ -32,25 +42,59 @@ const pattern = (id: string, title: string): RoadmapItem => ({
 
 export const ROADMAP: RoadmapPhase[] = [
   {
-    id: "p0",
-    title: "Get access",
-    weeks: "Day 1",
-    goal: "Unlock the courses as cheaply as possible.",
-    items: [
-      { id: "p0-github", title: "Claim the GitHub Student Pack offer", detail: "6 months free on 70+ courses, plus 30% off paid plans.", url: `${EDU}/github-students` },
-      { id: "p0-standard", title: "Get the Standard plan", detail: "Includes every Grokking course. Compare the student discount with any sale at checkout.", url: `${EDU}/unlimited` },
-    ],
-    tip: "Wait to upgrade to Premium (AI mock interviews) until Phase 6.",
-  },
-  {
     id: "p1",
     title: "Python foundations",
     weeks: "Weeks 1–3",
     goal: "Write everyday Python without looking things up.",
     items: [
-      { id: "p1-learn", title: "Learn Python 3 (free)", detail: "Skip it if classes, loops and dictionaries already feel easy.", hours: 10, url: search("courses", "Learn Python 3 Free Interactive Course") },
-      { id: "p1-guide-a", title: "Comprehensive Guide, modules 1–11", detail: "Types, flow control, collections, functions, comprehensions, object model, classes.", hours: 8, url: `${EDU}/courses/learn-python-3-complete-guide` },
-      { id: "p1-quickcart", title: "Project: QuickCart inventory manager", url: `${EDU}/courses/learn-python-3-complete-guide` },
+      {
+        id: "p1-learn",
+        title: "Learn Python 3 (free)",
+        detail: "Skip it if classes, loops and dictionaries already feel easy.",
+        hours: 10,
+        url: search("courses", "Learn Python 3 Free Interactive Course"),
+        guide: {
+          focus: ["Variables and the basic types: int, float, str, bool", "if / elif / else, for and while loops", "Lists and dictionaries: adding, removing, looking things up", "Writing small functions with parameters and return values"],
+          checkpoints: [
+            "What's the difference between a list and a tuple, and when would you pick each?",
+            "What does `range(2, 10, 3)` produce?",
+            "What's the difference between `return` and `print` inside a function?",
+            "What happens if you remove items from a list while looping over it?",
+          ],
+          practice: "Write a function that takes a sentence and reports how many times each word appears, without importing anything. Then print the most common word.",
+        },
+      },
+      {
+        id: "p1-guide-a",
+        title: "Comprehensive Guide, modules 1–11",
+        detail: "Types, flow control, collections, functions, comprehensions, object model, classes.",
+        hours: 8,
+        url: `${EDU}/courses/learn-python-3-complete-guide`,
+        guide: {
+          focus: ["Mutability and identity: `is` versus `==`", "Comprehensions, and when a plain loop reads better", "Scope and closures: the LEGB rule", "Classes: `__init__`, `__repr__`, `__eq__`; composition versus inheritance"],
+          checkpoints: [
+            "Why is `def f(items=[])` a bug waiting to happen?",
+            "When can `a == b` be true while `a is b` is false?",
+            "Does a closure capture a variable's value or the variable itself?",
+            "What's the difference between `__str__` and `__repr__`, and who uses each?",
+          ],
+          practice: "Write a `Point` class with `__repr__`, `__eq__` and a `distance_to(other)` method. Then make points usable as dictionary keys. What else do you need to add, and why?",
+        },
+      },
+      {
+        id: "p1-quickcart",
+        title: "Project: QuickCart inventory manager",
+        url: `${EDU}/courses/learn-python-3-complete-guide`,
+        guide: {
+          focus: ["Splitting a program into functions and classes", "Where each piece of state lives, and who may change it", "Handling bad input without crashing"],
+          checkpoints: [
+            "Can you describe each class in one sentence? If not, what is it doing too much of?",
+            "What happens when a user types text where a number is expected?",
+            "Which part of your program would be hardest to test, and why?",
+          ],
+          practice: "Before you start coding, sketch your classes and functions on paper, then describe the plan in the mentor and press Plan.",
+        },
+      },
     ],
   },
   {
@@ -59,11 +103,78 @@ export const ROADMAP: RoadmapPhase[] = [
     weeks: "Weeks 4–6",
     goal: "Know the language deeply, and the tools LeetCode in Python relies on.",
     items: [
-      { id: "p2-guide-b", title: "Comprehensive Guide, modules 12–22", detail: "Errors, testing, generators, concurrency, async, decorators, metaprogramming, packaging.", hours: 8, url: `${EDU}/courses/learn-python-3-complete-guide` },
-      { id: "p2-projects", title: "Projects: BiblioTech and FactStorm CLI", url: `${EDU}/courses/learn-python-3-complete-guide` },
-      { id: "p2-201", title: "Python 201", detail: "The standard library in depth.", hours: 11, url: search("courses", "Python 201") },
-      { id: "p2-teasers", title: "Python Brain Teasers (checkpoint)", hours: 1.5, url: search("courses", "Python Brain Teasers") },
-      { id: "p2-toolkit", title: "Drill the interview toolkit", detail: "collections (deque, Counter, defaultdict), heapq, bisect, itertools, functools.cache, sorted(key=…), slicing, string methods." },
+      {
+        id: "p2-guide-b",
+        title: "Comprehensive Guide, modules 12–22",
+        detail: "Errors, testing, generators, concurrency, async, decorators, metaprogramming, packaging.",
+        hours: 8,
+        url: `${EDU}/courses/learn-python-3-complete-guide`,
+        guide: {
+          focus: ["Exceptions: \"ask forgiveness\" style and custom exception types", "Writing tests before you trust code", "Iterators and generators: `yield` and lazy evaluation", "Threads versus processes versus asyncio, and the GIL", "Decorators and context managers"],
+          checkpoints: [
+            "When would you raise a custom exception instead of returning `None`?",
+            "Why can a generator be looped over only once?",
+            "For 100 slow network calls, would you use threads, processes or asyncio? What about 100 heavy calculations?",
+            "What does `functools.wraps` fix in a decorator?",
+          ],
+          practice: "Write a `@timer` decorator that prints how long a function took. Then write a generator that reads a big file line by line and yields only non-empty lines, and two tests for it.",
+        },
+      },
+      {
+        id: "p2-projects",
+        title: "Projects: BiblioTech and FactStorm CLI",
+        url: `${EDU}/courses/learn-python-3-complete-guide`,
+        guide: {
+          focus: ["Project layout and packaging", "Command-line arguments and configuration", "Tests that let you change code without fear"],
+          checkpoints: [
+            "Could a classmate install and run your CLI from a fresh clone? What would they get stuck on?",
+            "Which test would have caught your last bug?",
+          ],
+          practice: "Add one feature of your own design to FactStorm. Write its test first, watch it fail, then make it pass.",
+        },
+      },
+      {
+        id: "p2-201",
+        title: "Python 201",
+        detail: "The standard library in depth.",
+        hours: 11,
+        url: search("courses", "Python 201"),
+        guide: {
+          focus: ["argparse, logging, json and datetime", "collections and itertools", "Unicode: bytes versus str, and encodings", "unittest basics"],
+          checkpoints: [
+            "What's the difference between `bytes` and `str`, and where do encodings come in?",
+            "When should you use `logging` instead of `print`?",
+            "What does `itertools.groupby` assume about its input?",
+          ],
+          practice: "Take a script you've already written and give it proper arguments with argparse and output with logging.",
+        },
+      },
+      {
+        id: "p2-teasers",
+        title: "Python Brain Teasers (checkpoint)",
+        hours: 1.5,
+        url: search("courses", "Python Brain Teasers"),
+        guide: {
+          focus: ["Predicting output before running code", "The surprising corners: mutability, scope, floating point, late binding"],
+          checkpoints: ["Before each teaser, write down your prediction. How many did you get right?", "Which wrong guesses came from the same misunderstanding?"],
+          practice: "For every teaser you got wrong, write one sentence explaining why Python behaves that way, then ask the mentor to check your explanation.",
+        },
+      },
+      {
+        id: "p2-toolkit",
+        title: "Drill the interview toolkit",
+        detail: "collections (deque, Counter, defaultdict), heapq, bisect, itertools, functools.cache, sorted(key=…), slicing, string methods.",
+        guide: {
+          focus: ["`deque` for O(1) at both ends; `Counter` and `defaultdict` for counting and grouping", "`heapq` is a min-heap", "`bisect` for searching sorted lists", "`itertools` (combinations, permutations, accumulate) and `functools.cache`", "`sorted` with `key=` and tuples; slicing tricks"],
+          checkpoints: [
+            "How do you get max-heap behavior from `heapq`?",
+            "What's the time complexity of `list.pop(0)` compared with `deque.popleft()`?",
+            "How do `bisect_left` and `bisect_right` differ on duplicates?",
+            "How would you sort words by length, then alphabetically?",
+          ],
+          practice: "Solve three easy LeetCode problems twice: once with plain lists and loops, once with the best tool from this list. Compare the two versions.",
+        },
+      },
     ],
   },
   {

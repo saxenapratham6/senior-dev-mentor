@@ -22,7 +22,8 @@ type FromBoard =
   | { type: "example"; name: string }
   | { type: "roadmapToggle"; id: string }
   | { type: "roadmapSolved"; difficulty: "easy" | "medium" | "hard"; delta: 1 | -1 }
-  | { type: "openUrl"; url: string };
+  | { type: "openUrl"; url: string }
+  | { type: "guideMe"; id: string };
 
 export interface BoardHooks {
   onOpen(): void;
@@ -34,6 +35,7 @@ export interface BoardHooks {
   onRoadmapToggle(id: string): void;
   onRoadmapSolved(difficulty: "easy" | "medium" | "hard", delta: 1 | -1): void;
   onOpenUrl(url: string): void;
+  onGuideMe(id: string): void;
 }
 
 export class PandaBoard implements vscode.Disposable {
@@ -98,6 +100,9 @@ export class PandaBoard implements vscode.Disposable {
           break;
         case "openUrl":
           this.hooks.onOpenUrl(m.url);
+          break;
+        case "guideMe":
+          this.hooks.onGuideMe(m.id);
           break;
       }
     });

@@ -188,7 +188,15 @@
             return `<li class="${done.has(it.id) ? "done" : ""}">
               <label><input type="checkbox" data-item="${esc(it.id)}" ${done.has(it.id) ? "checked" : ""}><span class="item-title">${rich(it.title)}</span>${meta ? `<span class="muted small">${meta}</span>` : ""}</label>
               ${it.detail ? `<div class="item-detail muted small">${rich(it.detail)}</div>` : ""}
-              ${it.url ? `<button class="link small" data-url="${esc(it.url)}" title="${esc(it.url)}"><i class="codicon codicon-link-external"></i>Open</button>` : ""}
+              ${it.guide ? `<details class="guide"><summary><i class="codicon codicon-book"></i>How to study this</summary>
+                <h3>Focus on</h3><ul>${it.guide.focus.map((f) => `<li>${rich(f)}</li>`).join("")}</ul>
+                <h3>Check yourself</h3><ol>${it.guide.checkpoints.map((c) => `<li>${rich(c)}</li>`).join("")}</ol>
+                <h3>Try it in your editor</h3><p>${rich(it.guide.practice)}</p>
+              </details>` : ""}
+              <span class="item-actions">
+                <button class="link small" data-guide="${esc(it.id)}" title="Talk this step through with the mentor"><i class="codicon codicon-mortar-board"></i>Guide me</button>
+                ${it.url ? `<button class="link small" data-url="${esc(it.url)}" title="${esc(it.url)}"><i class="codicon codicon-link-external"></i>Open</button>` : ""}
+              </span>
             </li>`;
           })
           .join("");
@@ -219,6 +227,8 @@
   document.addEventListener("click", (e) => {
     const link = e.target.closest("[data-url]");
     if (link) vscode.postMessage({ type: "openUrl", url: link.dataset.url });
+    const guide = e.target.closest("[data-guide]");
+    if (guide) vscode.postMessage({ type: "guideMe", id: guide.dataset.guide });
     const solved = e.target.closest("[data-solved]");
     if (solved) vscode.postMessage({ type: "roadmapSolved", difficulty: solved.dataset.solved, delta: Number(solved.dataset.delta) });
   });

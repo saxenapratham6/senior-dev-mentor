@@ -22,7 +22,7 @@ End every reply with one final line in exactly this form, naming 1-3 CS concepts
 CONCEPTS: concept one, concept two`;
 }
 
-export type MentorAction = "chat" | "review" | "hint" | "explainError" | "checkPlan" | "quiz" | "teach";
+export type MentorAction = "chat" | "review" | "hint" | "explainError" | "checkPlan" | "quiz" | "teach" | "guide";
 
 export function actionPreamble(action: MentorAction, extra?: string): string {
   switch (action) {
@@ -36,6 +36,8 @@ export function actionPreamble(action: MentorAction, extra?: string): string {
       return "Before I write any code, here's my plan. Tell me what's solid, then ask about the gaps or edge cases I missed. Don't write the code.";
     case "quiz":
       return "Quiz me on the code I wrote, to check that I understand it. Ask 2 short questions (for example: predict the output for an input, the time complexity, or what happens on an edge case). Don't give the answers yet; I'll reply.";
+    case "guide":
+      return `Be my study guide for this step of my learning roadmap: ${extra}\n\nStart by asking me one question about what I already know. Then name the 3-4 ideas that matter most, give me 2-3 checkpoint questions to answer myself (don't answer them), and one small exercise to try in my editor. Keep it short; I'll reply with my answers and you'll check them.`;
     case "teach":
       return `Teach me this, step by step, with tiny examples (at most a few lines each), and end with a small exercise I can try in my editor: ${extra}`;
     default:

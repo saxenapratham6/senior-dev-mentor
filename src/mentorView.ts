@@ -51,6 +51,7 @@ const ACTION_LABELS: Record<MentorAction, { text: string; icon: string }> = {
   checkPlan: { text: "Check my plan", icon: "checklist" },
   quiz: { text: "Quiz me", icon: "question" },
   teach: { text: "Teach me", icon: "book" },
+  guide: { text: "Guide me", icon: "mortar-board" },
 };
 
 // "show me how a stack works", "visualize my loop", "draw a BST" go to the board.
@@ -87,6 +88,7 @@ export class MentorViewProvider implements vscode.WebviewViewProvider {
       onExample: (name) => this.log("visualized", name, () => this.session.visualized.push(name)),
       onRoadmapToggle: (id) => void this.updateRoadmap((st) => toggleItem(st, id)),
       onRoadmapSolved: (difficulty, delta) => void this.updateRoadmap((st) => addSolved(st, difficulty, delta)),
+      onGuideMe: (id) => void this.guideMe(id),
       onOpenUrl: (url) => {
         if (isRoadmapLink(url)) void vscode.env.openExternal(vscode.Uri.parse(url));
       },
@@ -230,7 +232,7 @@ export class MentorViewProvider implements vscode.WebviewViewProvider {
 
   // -------------------------------------------------------------- chat
 
-  private async ask(action: MentorAction, text: string): Promise<void> {
+  private async ask(action: MentorAction, text: string, about?: string): Promise<void> {
     if (this.abort) {
       this.post({ type: "mentor", text: "One thing at a time. Let me finish this answer first (or press **Stop**)." });
       return;
@@ -274,7 +276,7 @@ export class MentorViewProvider implements vscode.WebviewViewProvider {
       this.session.hints[decision.level]++;
     }
 
-    const content = this.buildUserContent(action, text, code, preambleExtra);
+    const content = this.buildUserContent(action, text, code, action === "guide" ? about : preambleExtra);
     await this.progress.update((p) => {
       if (action === "review") p.reviews++;
       else if (action === "checkPlan") p.plansChecked++;
@@ -291,10 +293,10 @@ export class MentorViewProvider implements vscode.WebviewViewProvider {
 
   private buildUserContent(action: MentorAction, text: string, code: CodeContext | undefined, extra?: string): string {
     const parts: string[] = [];
-    const pre = actionPreamble(action, action === "teach" ? text : extra);
+    const pre = actionPreamble(action, action === "teach" || action === "guide" ? extra ?? text : extra);
     if (pre) parts.push(pre);
-    if (text && action !== "teach") parts.push(action === "hint" ? `What I've tried / what I think: ${text}` : text);
-    const attachCode = action !== "teach" && action !== "checkPlan" ? code : undefined;
+    if (text && action !== "teach" && action !== "guide") parts.push(action === "hint" ? `What I've tried / what I think: ${text}` : text);
+    const attachCode = action !== "teach" && action !== "checkPlan" && action !== "guide" ? code : undefined;
     if (attachCode) parts.push(formatContext(attachCode));
     return parts.join("\n\n");
   }
@@ -428,6 +430,18 @@ export class MentorViewProvider implements vscode.WebviewViewProvider {
     const finished = after.phases.find((p, i) => p.done === p.total && before.phases[i].done < before.phases[i].total);
     if (finished) this.log("roadmap", `finished ${ROADMAP.find((p) => p.id === finished.id)!.title}`);
     if (before.nextMilestone && after.solvedTotal >= before.nextMilestone.count) this.log("roadmap", `${before.nextMilestone.count} problems solved`);
+  }
+
+  /** "Guide me" on a roadmap step: a mentor session about that step, in the chat. */
+  private async guideMe(id: string): Promise<void> {
+    const phase = ROADMAP.find((p) => p.items.some((i) => i.id === id));
+    const item = phase?.items.find((i) => i.id === id);
+    if (!phase || !item) return;
+    await vscode.commands.executeCommand("seniorDevMentor.view.focus");
+    const about = [`"${item.title}" in my "${phase.title}" phase.`, item.detail, item.guide ? `Focus areas: ${item.guide.focus.join("; ")}.` : ""]
+      .filter(Boolean)
+      .join(" ");
+    await this.ask("guide", item.title, about);
   }
 
   /** "Show me" from the editor's context menu or the command palette. */

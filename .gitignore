@@ -5,3 +5,4 @@ dist/
 dev/preview.html
 media/codicons/
 .vscode-test/
+dev/board-preview.html
