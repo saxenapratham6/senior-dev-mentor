@@ -11,6 +11,7 @@ import { OllamaProvider } from "./providers/ollama";
 import { normalizeScene, scenePrompt, SceneSchema, extractLineRefs } from "./scene";
 import { EditorPanda, PandaWhereabouts } from "./editorPanda";
 import { PandaBoard } from "./board";
+import { ROADMAP, PROBLEM_MILESTONES, RoadmapState, emptyRoadmapState, toggleItem, addSolved, roadmapProgress, isRoadmapLink } from "./roadmap";
 import {
   SessionLog,
   newSessionLog,
@@ -26,6 +27,7 @@ import {
 } from "./summary";
 
 export const SECRET_KEY = "seniorDevMentor.anthropicApiKey";
+const ROADMAP_KEY = "seniorDevMentor.roadmap";
 const MAX_TURNS = 12;
 
 type FromWebview =
@@ -33,6 +35,7 @@ type FromWebview =
   | { type: "ask"; action: MentorAction; text: string }
   | { type: "showMe"; text: string }
   | { type: "wrapUp" }
+  | { type: "roadmap" }
   | { type: "stop" }
   | { type: "newProblem" }
   | { type: "setApiKey" }
@@ -82,6 +85,11 @@ export class MentorViewProvider implements vscode.WebviewViewProvider {
       onSaveNotes: () => void this.saveNotes(),
       onFix: (action) => void vscode.commands.executeCommand(action === "setApiKey" ? "seniorDevMentor.setApiKey" : "workbench.action.openSettings", action === "setApiKey" ? undefined : "seniorDevMentor"),
       onExample: (name) => this.log("visualized", name, () => this.session.visualized.push(name)),
+      onRoadmapToggle: (id) => void this.updateRoadmap((st) => toggleItem(st, id)),
+      onRoadmapSolved: (difficulty, delta) => void this.updateRoadmap((st) => addSolved(st, difficulty, delta)),
+      onOpenUrl: (url) => {
+        if (isRoadmapLink(url)) void vscode.env.openExternal(vscode.Uri.parse(url));
+      },
     });
     ctx.subscriptions.push(
       this.board,
@@ -163,6 +171,9 @@ export class MentorViewProvider implements vscode.WebviewViewProvider {
         break;
       case "wrapUp":
         await this.wrapUp();
+        break;
+      case "roadmap":
+        this.showRoadmap();
         break;
       case "stop":
         this.abort?.abort();
@@ -395,6 +406,30 @@ export class MentorViewProvider implements vscode.WebviewViewProvider {
     }
   }
 
+  // -------------------------------------------------------------- roadmap
+
+  private roadmapState(): RoadmapState {
+    return { ...emptyRoadmapState(), ...this.ctx.globalState.get<RoadmapState>(ROADMAP_KEY) };
+  }
+
+  /** The panda presents your study roadmap on its board. */
+  showRoadmap(): void {
+    const state = this.roadmapState();
+    this.board.show({ type: "roadmap", phases: ROADMAP, state, progress: roadmapProgress(state), milestones: PROBLEM_MILESTONES });
+  }
+
+  private async updateRoadmap(change: (st: RoadmapState) => RoadmapState): Promise<void> {
+    const before = roadmapProgress(this.roadmapState());
+    const state = change(this.roadmapState());
+    await this.ctx.globalState.update(ROADMAP_KEY, state);
+    const after = roadmapProgress(state);
+    this.board.show({ type: "roadmap", phases: ROADMAP, state, progress: after, milestones: PROBLEM_MILESTONES });
+    // Finishing a phase or reaching a problem milestone is worth a cheer.
+    const finished = after.phases.find((p, i) => p.done === p.total && before.phases[i].done < before.phases[i].total);
+    if (finished) this.log("roadmap", `finished ${ROADMAP.find((p) => p.id === finished.id)!.title}`);
+    if (before.nextMilestone && after.solvedTotal >= before.nextMilestone.count) this.log("roadmap", `${before.nextMilestone.count} problems solved`);
+  }
+
   /** "Show me" from the editor's context menu or the command palette. */
   async showMeFromEditor(): Promise<void> {
     await this.showMe("");
@@ -494,6 +529,7 @@ export class MentorViewProvider implements vscode.WebviewViewProvider {
   <div class="row">
     <span id="provider" class="muted small"></span>
     <span class="row">
+      <button type="button" id="roadmap" class="icon-btn" title="My roadmap: Python mastery to interview-ready">${icon("map")}</button>
       <button type="button" id="wrapUp" class="icon-btn" title="Wrap up: the panda summarizes this session">${icon("notebook")}</button>
       <button type="button" id="newProblem" class="icon-btn" title="New problem: reset hints and the chat">${icon("add")}</button>
       <button type="button" id="stop" class="secondary" hidden>${icon("debug-stop")}Stop</button>

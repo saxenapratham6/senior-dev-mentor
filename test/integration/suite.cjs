@@ -96,6 +96,13 @@ exports.run = async function () {
     assert.equal(panda.isOut, false);
   });
 
+  await check("the roadmap opens on the board", async () => {
+    await vscode.commands.executeCommand("seniorDevMentor.roadmap");
+    await sleep(600);
+    assert.equal(api.board.isOpen, true);
+    api.board.dispose();
+  });
+
   console.log("\n" + results.join("\n") + "\n");
   if (results.some((r) => r.startsWith("FAIL"))) throw new Error("integration checks failed");
 };

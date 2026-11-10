@@ -2,7 +2,7 @@
   "name": "senior-dev-mentor",
   "displayName": "Senior Dev Mentor",
   "description": "An open-source AI mentor that teaches you to code instead of coding for you. A panda lives in your editor and walks to the lines worth a look, draws any data structure on its board, and wraps up what you learned.",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "publisher": "senior-dev-mentor",
   "license": "MIT",
   "repository": {
@@ -77,6 +77,11 @@
       {
         "command": "seniorDevMentor.wrapUp",
         "title": "Wrap Up This Session",
+        "category": "Mentor"
+      },
+      {
+        "command": "seniorDevMentor.roadmap",
+        "title": "Open My Roadmap (Python to interview-ready)",
         "category": "Mentor"
       },
       {

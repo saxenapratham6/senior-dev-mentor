@@ -17,7 +17,7 @@
   const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
 
   function show(view) {
-    for (const v of ["sceneView", "examplesView", "loadingView", "summaryView"]) $(v).hidden = v !== view;
+    for (const v of ["sceneView", "examplesView", "loadingView", "summaryView", "roadmapView"]) $(v).hidden = v !== view;
     if (view !== "sceneView") $("counter").textContent = "";
   }
 
@@ -145,6 +145,84 @@
     show("summaryView");
   }
 
+  // ------------------------------------------------------------ roadmap
+
+  const openPhases = new Set();
+  let roadmapRendered = false;
+  let lastPhaseDone = null; // phase id -> done count, to notice a phase being finished
+
+  function renderRoadmap(m) {
+    const { phases, state, progress } = m;
+    const done = new Set(state.done);
+    $("title").textContent = "Your roadmap";
+    const current = phases.find((p) => p.id === progress.currentPhase);
+    if (!roadmapRendered && current) openPhases.add(current.id);
+    roadmapRendered = true;
+
+    // The panda says where you are, and cheers when a phase is finished.
+    const justFinished = lastPhaseDone && phases.find((ph, k) => progress.phases[k].done === progress.phases[k].total && lastPhaseDone[ph.id] < progress.phases[k].total);
+    lastPhaseDone = Object.fromEntries(phases.map((ph, k) => [ph.id, progress.phases[k].done]));
+    $("roadmapPanda").src = `${sprites}/${progress.percent === 100 || justFinished ? "cheer" : progress.doneItems ? "talk" : "sit"}.svg`;
+    $("roadmapHeadline").innerHTML = progress.percent === 100
+      ? "<b>You finished the whole roadmap.</b> Keep the daily rhythm going, and good luck in your interviews!"
+      : current
+        ? `${justFinished ? `<b>${esc(justFinished.title)}: done!</b> ` : ""}You're in <b>${esc(current.title)}</b> (${esc(current.weeks)}). ${progress.doneItems} of ${progress.totalItems} steps done.`
+        : "";
+    $("roadmapNext").innerHTML = progress.next ? `Next up: <b>${rich(progress.next.title)}</b>` : "";
+    $("roadmapPercent").textContent = `${progress.percent}%`;
+    $("roadmapBar").style.width = `${progress.percent}%`;
+
+    for (const d of ["easy", "medium", "hard"]) $(`solved-${d}`).textContent = state.solved[d];
+    $("solvedTotal").textContent = progress.nextMilestone ? `${progress.solvedTotal} / ${progress.nextMilestone.count} ${progress.nextMilestone.label}` : `${progress.solvedTotal}: interview-ready`;
+    $("milestones").innerHTML = m.milestones
+      .map((ms) => `<span class="milestone ${progress.solvedTotal >= ms.count ? "hit" : ""}"><i class="codicon codicon-${progress.solvedTotal >= ms.count ? "pass-filled" : "circle-large-outline"}"></i>${ms.count} ${esc(ms.label)}</span>`)
+      .join("");
+
+    $("phases").innerHTML = phases
+      .map((ph, k) => {
+        const pp = progress.phases[k];
+        const complete = pp.done === pp.total;
+        const items = ph.items
+          .map((it) => {
+            const meta = [it.hours ? `${it.hours} h` : ""].filter(Boolean).join(" · ");
+            return `<li class="${done.has(it.id) ? "done" : ""}">
+              <label><input type="checkbox" data-item="${esc(it.id)}" ${done.has(it.id) ? "checked" : ""}><span class="item-title">${rich(it.title)}</span>${meta ? `<span class="muted small">${meta}</span>` : ""}</label>
+              ${it.detail ? `<div class="item-detail muted small">${rich(it.detail)}</div>` : ""}
+              ${it.url ? `<button class="link small" data-url="${esc(it.url)}" title="${esc(it.url)}"><i class="codicon codicon-link-external"></i>Open</button>` : ""}
+            </li>`;
+          })
+          .join("");
+        return `<details class="phase ${complete ? "complete" : ""} ${ph.id === progress.currentPhase ? "current" : ""}" data-phase="${ph.id}" ${openPhases.has(ph.id) ? "open" : ""}>
+          <summary>
+            <i class="codicon codicon-${complete ? "pass-filled" : ph.id === progress.currentPhase ? "debug-start" : "circle-large-outline"}"></i>
+            <span class="phase-title">${esc(ph.title)}</span>
+            <span class="muted small">${esc(ph.weeks)}</span>
+            <span class="phase-count">${pp.done}/${pp.total}</span>
+          </summary>
+          <p class="muted small phase-goal">${rich(ph.goal)}</p>
+          <ul class="items">${items}</ul>
+          ${ph.tip ? `<p class="phase-tip small"><i class="codicon codicon-lightbulb"></i>${rich(ph.tip)}</p>` : ""}
+        </details>`;
+      })
+      .join("");
+    show("roadmapView");
+  }
+
+  $("phases").addEventListener("toggle", (e) => {
+    const d = e.target.closest("details");
+    if (d) d.open ? openPhases.add(d.dataset.phase) : openPhases.delete(d.dataset.phase);
+  }, true);
+  $("phases").addEventListener("change", (e) => {
+    const box = e.target.closest("[data-item]");
+    if (box) vscode.postMessage({ type: "roadmapToggle", id: box.dataset.item });
+  });
+  document.addEventListener("click", (e) => {
+    const link = e.target.closest("[data-url]");
+    if (link) vscode.postMessage({ type: "openUrl", url: link.dataset.url });
+    const solved = e.target.closest("[data-solved]");
+    if (solved) vscode.postMessage({ type: "roadmapSolved", difficulty: solved.dataset.solved, delta: Number(solved.dataset.delta) });
+  });
+
   // ------------------------------------------------------------ messages from the extension
 
   window.addEventListener("message", (event) => {
@@ -165,6 +243,9 @@
         break;
       case "summary":
         renderSummary(m.summary, m.stats);
+        break;
+      case "roadmap":
+        renderRoadmap(m);
         break;
       case "error":
         $("title").textContent = "Panda's board";

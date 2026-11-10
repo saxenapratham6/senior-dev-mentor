@@ -27,6 +27,7 @@ export function activate(context: vscode.ExtensionContext): { panda: EditorPanda
     vscode.commands.registerCommand("seniorDevMentor.newProblem", () => mentor.newProblem()),
     vscode.commands.registerCommand("seniorDevMentor.showMe", () => mentor.showMeFromEditor()),
     vscode.commands.registerCommand("seniorDevMentor.wrapUp", () => mentor.wrapUp()),
+    vscode.commands.registerCommand("seniorDevMentor.roadmap", () => mentor.showRoadmap()),
     vscode.commands.registerCommand("seniorDevMentor.pandaNext", () => panda.next()),
     vscode.commands.registerCommand("seniorDevMentor.pandaDismiss", () => panda.dismiss()),
     vscode.commands.registerCommand("seniorDevMentor.pandaAsk", () => {

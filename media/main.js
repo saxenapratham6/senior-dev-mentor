@@ -74,6 +74,7 @@
     input.value = "";
   });
   $("wrapUp").addEventListener("click", () => vscode.postMessage({ type: "wrapUp" }));
+  $("roadmap").addEventListener("click", () => vscode.postMessage({ type: "roadmap" }));
   $("stop").addEventListener("click", () => vscode.postMessage({ type: "stop" }));
   $("newProblem").addEventListener("click", () => vscode.postMessage({ type: "newProblem" }));
 

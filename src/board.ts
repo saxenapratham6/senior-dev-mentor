@@ -1,6 +1,7 @@
 import * as vscode from "vscode";
 import type { Scene } from "./scene";
 import type { Summary, SessionStats } from "./summary";
+import type { RoadmapPhase, RoadmapState, RoadmapProgress } from "./roadmap";
 
 // The panda's board: a panel beside the code where the panda presents things
 // that need room, like a visualization it walks you through, or the wrap-up.
@@ -10,14 +11,18 @@ export type BoardMessage =
   | { type: "scene"; scene: Scene }
   | { type: "examples" }
   | { type: "summary"; summary: Summary; stats: SessionStats }
-  | { type: "error"; message: string; action?: string };
+  | { type: "error"; message: string; action?: string }
+  | { type: "roadmap"; phases: RoadmapPhase[]; state: RoadmapState; progress: RoadmapProgress; milestones: { count: number; label: string }[] };
 
 type FromBoard =
   | { type: "ready" }
   | { type: "prediction"; right: boolean }
   | { type: "saveNotes" }
   | { type: "fix"; action: string }
-  | { type: "example"; name: string };
+  | { type: "example"; name: string }
+  | { type: "roadmapToggle"; id: string }
+  | { type: "roadmapSolved"; difficulty: "easy" | "medium" | "hard"; delta: 1 | -1 }
+  | { type: "openUrl"; url: string };
 
 export interface BoardHooks {
   onOpen(): void;
@@ -26,6 +31,9 @@ export interface BoardHooks {
   onSaveNotes(): void;
   onFix(action: string): void;
   onExample(name: string): void;
+  onRoadmapToggle(id: string): void;
+  onRoadmapSolved(difficulty: "easy" | "medium" | "hard", delta: 1 | -1): void;
+  onOpenUrl(url: string): void;
 }
 
 export class PandaBoard implements vscode.Disposable {
@@ -81,6 +89,15 @@ export class PandaBoard implements vscode.Disposable {
           break;
         case "example":
           this.hooks.onExample(m.name);
+          break;
+        case "roadmapToggle":
+          this.hooks.onRoadmapToggle(m.id);
+          break;
+        case "roadmapSolved":
+          this.hooks.onRoadmapSolved(m.difficulty, m.delta);
+          break;
+        case "openUrl":
+          this.hooks.onOpenUrl(m.url);
           break;
       }
     });
@@ -168,6 +185,27 @@ function boardHtml(webview: vscode.Webview, media: vscode.Uri): string {
       <img class="panda big" alt="" src="${uri("panda/think.svg")}">
       <div class="bubble static"><p id="loadingText">Drawing it…</p></div>
     </div>
+  </section>
+
+  <section id="roadmapView" class="view" hidden>
+    <div class="intro">
+      <img id="roadmapPanda" class="panda big" alt="" src="${uri("panda/talk.svg")}">
+      <div class="bubble static"><p id="roadmapHeadline"></p><p id="roadmapNext" class="muted"></p></div>
+    </div>
+    <div class="roadmap-top">
+      <div class="meter"><div class="meter-label"><span>Roadmap</span><span id="roadmapPercent"></span></div><div class="meter-bar"><span id="roadmapBar"></span></div></div>
+      <div class="solved" aria-label="Problems solved">
+        <div class="meter-label"><span>Problems solved</span><span id="solvedTotal"></span></div>
+        <div class="solved-row">
+          <span class="counter easy"><button data-solved="easy" data-delta="-1" title="One fewer easy" aria-label="One fewer easy">${icon("remove")}</button><b id="solved-easy">0</b> easy<button data-solved="easy" data-delta="1" title="Solved an easy" aria-label="Solved an easy">${icon("add")}</button></span>
+          <span class="counter medium"><button data-solved="medium" data-delta="-1" title="One fewer medium" aria-label="One fewer medium">${icon("remove")}</button><b id="solved-medium">0</b> medium<button data-solved="medium" data-delta="1" title="Solved a medium" aria-label="Solved a medium">${icon("add")}</button></span>
+          <span class="counter hard"><button data-solved="hard" data-delta="-1" title="One fewer hard" aria-label="One fewer hard">${icon("remove")}</button><b id="solved-hard">0</b> hard<button data-solved="hard" data-delta="1" title="Solved a hard" aria-label="Solved a hard">${icon("add")}</button></span>
+        </div>
+        <div id="milestones" class="milestones"></div>
+      </div>
+    </div>
+    <div id="phases" class="phases"></div>
+    <p class="muted small">Daily rhythm: 2 problems a day; redo each one after 1, 3 and 7 days; note the pattern you recognized. Stuck? Use the mentor's Hint before reading a solution.</p>
   </section>
 
   <section id="summaryView" class="view" hidden>
