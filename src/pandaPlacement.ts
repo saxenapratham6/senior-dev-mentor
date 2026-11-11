@@ -12,6 +12,11 @@ export interface Placement {
   lineCh: number;
   /** Bubble above the panda, or below it when the line is near the top of the screen. */
   bubbleBelow: boolean;
+  /**
+   * The panda normally stands on the line with its head above it. On the top two lines of
+   * the screen its head would be cut off, so it sits below the line instead and points up at it.
+   */
+  below: boolean;
 }
 
 /** Visual width of a line in character cells, with tabs expanded. */
@@ -26,22 +31,25 @@ export function visualWidth(text: string, tabSize: number): number {
  * on top of code, and keep the column steady while it walks through a region.
  */
 export function placePanda(lines: string[], line: number, visibleTop: number, tabSize: number): Placement {
+  const below = line - visibleTop < 2;
   const from = Math.max(0, line - 3);
-  const to = Math.min(lines.length - 1, line + 2);
+  // Sitting below the line, the panda reaches about four lines down; keep clear of those too.
+  const to = Math.min(lines.length - 1, line + (below ? 4 : 2));
   let widest = 0;
   for (let i = from; i <= to; i++) widest = Math.max(widest, visualWidth(lines[i], tabSize));
   const column = Math.min(widest + 2, 120);
   const lineCh = visualWidth(lines[line] ?? "", tabSize);
-  return { offsetCh: Math.max(1, column - lineCh), lineCh, bubbleBelow: line - visibleTop < 4 };
+  return { offsetCh: Math.max(1, column - lineCh), lineCh, bubbleBelow: line - visibleTop < 4, below };
 }
 
 /** CSS for the panda box. Injected through `textDecoration`, which VS Code copies into a style rule. */
-export function pandaCss(spriteUrl: string, offsetCh: number): string {
+export function pandaCss(spriteUrl: string, offsetCh: number, below = false): string {
   return [
     "none",
     "position: absolute",
     `margin-left: ${offsetCh}ch`,
-    `top: -${SIZE_PX - 20}px`,
+    // Feet on the line, or (near the top of the screen) head just under it.
+    below ? `top: ${BELOW_PX}px` : `top: -${SIZE_PX - 20}px`,
     `width: ${SIZE_PX}px`,
     `height: ${SIZE_PX}px`,
     `background: url("${spriteUrl}") center / contain no-repeat`,
@@ -52,6 +60,7 @@ export function pandaCss(spriteUrl: string, offsetCh: number): string {
 }
 
 const BUBBLE_W = 250;
+const BELOW_PX = 16;
 
 export function bubbleCss(place: Placement): string {
   return [
@@ -60,7 +69,7 @@ export function bubbleCss(place: Placement): string {
     // The bubble's right edge sits just past the panda's middle and it extends left, over the
     // code above (or below) the line, but never past column 0.
     `margin-left: max(calc(${place.offsetCh}ch - ${BUBBLE_W - SIZE_PX / 2 - 12}px), -${place.lineCh}ch)`,
-    place.bubbleBelow ? `top: ${SIZE_PX - 12}px` : `bottom: ${SIZE_PX + 2}px`,
+    place.below ? `top: ${BELOW_PX + SIZE_PX - 6}px` : place.bubbleBelow ? `top: ${SIZE_PX - 12}px` : `bottom: ${SIZE_PX + 2}px`,
     `width: ${BUBBLE_W}px`,
     "box-sizing: border-box",
     "white-space: normal",

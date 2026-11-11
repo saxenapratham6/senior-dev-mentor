@@ -100,6 +100,17 @@ def talk():
     return g
 
 
+def point():
+    """Sitting below the line it's explaining, pointing up and to the left at it."""
+    g = base()
+    g[12] = list("....KWWWWRRWWWWK....")
+    # The left arm leaves the body at the shoulder and points straight up, beside the head.
+    g[14] = list("....KWWWWWWWWKKKK...")
+    g[15] = list("....KWWWWWWWWWKKK...")
+    paint(g, 0, 8, ["K...", "KK..", "KK..", "KK..", "KK..", "KKKK"])
+    return g
+
+
 def cheer():
     g = base()
     # Happy eyes: upside-down V shapes.
@@ -146,7 +157,7 @@ def svg(grid):
     return f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {SIZE} {SIZE}" shape-rendering="crispEdges">{"".join(rects)}</svg>\n'
 
 
-POSES = {"sit": sit, "walk1": lambda: walk(1), "walk2": lambda: walk(2), "sleep": sleep, "think": think, "talk": talk, "cheer": cheer}
+POSES = {"sit": sit, "walk1": lambda: walk(1), "walk2": lambda: walk(2), "sleep": sleep, "think": think, "talk": talk, "point": point, "cheer": cheer}
 
 if __name__ == "__main__":
     out = Path(__file__).resolve().parent.parent / "media" / "panda"

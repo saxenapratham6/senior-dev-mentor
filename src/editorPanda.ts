@@ -22,8 +22,8 @@ export interface PandaWhereabouts {
   stops: number;
 }
 
-type Pose = "sit" | "walk1" | "walk2" | "sleep" | "think" | "talk" | "cheer";
-const POSES: Pose[] = ["sit", "walk1", "walk2", "sleep", "think", "talk", "cheer"];
+type Pose = "sit" | "walk1" | "walk2" | "sleep" | "think" | "talk" | "point" | "cheer";
+const POSES: Pose[] = ["sit", "walk1", "walk2", "sleep", "think", "talk", "point", "cheer"];
 
 const TICK_MS = 40;
 const MAX_WALK_TICKS = 14;
@@ -335,7 +335,7 @@ export class EditorPanda implements vscode.Disposable {
     const doc = editor.document;
     const line = Math.min(this.line, doc.lineCount - 1);
     const lines: string[] = [];
-    for (let i = Math.max(0, line - 3); i <= Math.min(doc.lineCount - 1, line + 2); i++) lines[i] = doc.lineAt(i).text;
+    for (let i = Math.max(0, line - 3); i <= Math.min(doc.lineCount - 1, line + 4); i++) lines[i] = doc.lineAt(i).text;
     const tabSize = typeof editor.options.tabSize === "number" ? editor.options.tabSize : 4;
     const place = placePanda(lines, line, editor.visibleRanges[0]?.start.line ?? 0, tabSize);
     const end = doc.lineAt(line).range.end;
@@ -343,11 +343,16 @@ export class EditorPanda implements vscode.Disposable {
       {
         range: new vscode.Range(end, end),
         renderOptions: {
-          before: { contentText: "", textDecoration: pandaCss(this.sprites[this.pose], place.offsetCh) },
+          before: { contentText: "", textDecoration: pandaCss(this.sprites[this.drawnPose(place.below)], place.offsetCh, place.below) },
           after: this.bubble ? { contentText: this.bubble, textDecoration: bubbleCss(place) } : undefined,
         },
       },
     ]);
+  }
+
+  /** Below the line, sitting or talking becomes pointing up at it. */
+  private drawnPose(below: boolean): Pose {
+    return below && (this.pose === "sit" || this.pose === "talk") ? "point" : this.pose;
   }
 
   private clearAll(): void {

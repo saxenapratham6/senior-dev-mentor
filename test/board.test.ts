@@ -22,6 +22,13 @@ test("the panda sits clear of nearby code and keeps its bubble on screen", () =>
   assert.equal(placePanda(lines, 2, -10, 4).bubbleBelow, false);
   assert.equal(visualWidth("\tx", 4), 5, "tabs expand to the tab stop");
   assert.match(pandaCss("data:x", 7), /margin-left: 7ch/);
+  // On the top two lines of the screen the panda sits below the line, clear of the lines it covers.
+  const top = placePanda([...lines, "x".repeat(50)], 1, 0, 4);
+  assert.equal(top.below, true);
+  assert.equal(top.lineCh + top.offsetCh, 52, "keeps clear of lines below it too");
+  assert.equal(placePanda(lines, 2, 0, 4).below, false);
+  assert.match(pandaCss("data:x", 7, true), /top: \d+px/, "drops below the line");
+  assert.match(bubbleCss(top), /top: \d+px/, "bubble goes under the panda");
   assert.match(bubbleCss(p), new RegExp(`-${p.lineCh}ch`), "bubble never starts left of column 0");
 });
 
