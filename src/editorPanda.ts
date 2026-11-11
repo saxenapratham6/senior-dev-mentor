@@ -25,9 +25,9 @@ export interface PandaWhereabouts {
 type Pose = "sit" | "walk1" | "walk2" | "sleep" | "think" | "talk" | "cheer";
 const POSES: Pose[] = ["sit", "walk1", "walk2", "sleep", "think", "talk", "cheer"];
 
-const TICK_MS = 70;
-const MAX_WALK_TICKS = 22;
-const FOLLOW_DELAY_MS = 1400;
+const TICK_MS = 40;
+const MAX_WALK_TICKS = 14;
+const FOLLOW_DELAY_MS = 600;
 const SLEEP_AFTER_MS = 90_000;
 
 // ---------------------------------------------------------------- the panda

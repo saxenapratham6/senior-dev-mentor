@@ -1,7 +1,8 @@
 // Where the editor panda and its bubble go, as CSS. Pure functions, so they
 // can be tested without VS Code.
 
-export const SIZE_PX = 64;
+// The sprites are 22x22 pixel art; a whole multiple keeps every pixel crisp.
+export const SIZE_PX = 66;
 
 
 export interface Placement {
@@ -44,6 +45,7 @@ export function pandaCss(spriteUrl: string, offsetCh: number): string {
     `width: ${SIZE_PX}px`,
     `height: ${SIZE_PX}px`,
     `background: url("${spriteUrl}") center / contain no-repeat`,
+    "image-rendering: pixelated",
     "pointer-events: none",
     "z-index: 20",
   ].join("; ");

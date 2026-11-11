@@ -7,7 +7,7 @@
   const panda = $("panda");
   const bubble = $("bubble");
   const floor = $("floor");
-  const PANDA_W = 72;
+  const PANDA_W = 66;
   let pandaX = 0;
   let walkTimer = null;
 
@@ -36,13 +36,13 @@
     const dist = Math.abs(target - pandaX);
     clearInterval(walkTimer);
     if (dist < 4) return placeBubble();
-    const ms = Math.min(900, 250 + dist * 2.5);
+    const ms = Math.min(420, 120 + dist * 1.2);
     panda.style.transitionDuration = `${ms}ms`;
     panda.classList.toggle("facing-left", target < pandaX);
     pandaX = target;
     panda.style.left = `${pandaX}px`;
     let frame = 0;
-    walkTimer = setInterval(() => pose(frame++ % 2 ? "walk2" : "walk1"), 110);
+    walkTimer = setInterval(() => pose(frame++ % 2 ? "walk2" : "walk1"), 65);
     setTimeout(() => {
       clearInterval(walkTimer);
       panda.classList.remove("facing-left");
@@ -89,7 +89,7 @@
         pose(right ? "cheer" : "talk");
       },
       // Wait for the nodes to finish sliding before walking to them.
-      onStep: () => setTimeout(followStep, 560),
+      onStep: () => setTimeout(followStep, 150),
       onAsk: () => {
         pose("think");
         placeBubble();

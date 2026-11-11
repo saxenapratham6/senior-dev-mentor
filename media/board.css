@@ -153,10 +153,10 @@ body { padding: 0 20px; min-height: 100vh; }
 
 /* the floor the panda walks on, under the diagram */
 .floor { position: relative; min-height: 132px; }
-.panda { width: 72px; height: 72px; image-rendering: auto; }
+.panda { width: 66px; height: 66px; image-rendering: pixelated; }
 .floor .panda { position: absolute; left: 0; bottom: 0; transition-property: left; transition-timing-function: ease-in-out; }
 .panda.facing-left { transform: scaleX(-1); }
-.panda.big { width: 96px; height: 96px; flex-shrink: 0; }
+.panda.big { width: 110px; height: 110px; flex-shrink: 0; }
 .bubble {
   position: absolute;
   top: 6px;
@@ -166,7 +166,7 @@ body { padding: 0 20px; min-height: 100vh; }
   border: 1px solid var(--vscode-editorHoverWidget-border, var(--border));
   box-shadow: 0 3px 12px rgba(0, 0, 0, 0.25);
   line-height: 1.5;
-  transition: left 0.4s ease-in-out;
+  transition: left 0.25s ease-out;
 }
 .bubble.static { position: relative; top: 0; max-width: 520px; }
 .bubble::before {
