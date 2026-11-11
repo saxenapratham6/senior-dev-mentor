@@ -2,7 +2,7 @@
   "name": "senior-dev-mentor",
   "displayName": "Senior Dev Mentor",
   "description": "An open-source AI mentor that teaches you to code instead of coding for you. A panda lives in your editor and walks to the lines worth a look, draws any data structure on its board, and wraps up what you learned.",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "publisher": "senior-dev-mentor",
   "license": "MIT",
   "repository": {
@@ -82,6 +82,11 @@
       {
         "command": "seniorDevMentor.roadmap",
         "title": "Open My Roadmap (Python to interview-ready)",
+        "category": "Mentor"
+      },
+      {
+        "command": "seniorDevMentor.openLesson",
+        "title": "Open the Python Lessons",
         "category": "Mentor"
       },
       {
@@ -203,6 +208,11 @@
           "type": "boolean",
           "default": true,
           "description": "The panda strolls over to the line you're working on when you pause."
+        },
+        "seniorDevMentor.pythonPath": {
+          "type": "string",
+          "default": "",
+          "description": "Python used to run lesson examples and check exercises. Leave empty to use python3 (python on Windows)."
         }
       }
     }
@@ -213,7 +223,8 @@
     "typecheck": "tsc --noEmit",
     "test": "node --import tsx --test test/*.test.ts",
     "package": "npm run build && vsce package --no-dependencies",
-    "test:vscode": "npm run build && node test/integration/run.mjs"
+    "test:vscode": "npm run build && node test/integration/run.mjs",
+    "lessons": "tsx dev/build-lessons.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.135.0",

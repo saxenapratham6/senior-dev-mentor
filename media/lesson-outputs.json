@@ -1,0 +1,512 @@
+{
+ "names-and-objects#s0": {
+  "stdout": "[1, 2, 3, 4]\nTrue\n"
+ },
+ "names-and-objects#s1": {
+  "stdout": "cats cat\n[1, 2, 3] [1, 2, 3]\n"
+ },
+ "names-and-objects#s2": {
+  "stdout": "True\nFalse\nTrue\n"
+ },
+ "names-and-objects#s3": {
+  "stdout": "int True\nfloat True\nstr False\nbool True\nNoneType False\nlist False\ntuple False\ndict False\nset False\n"
+ },
+ "names-and-objects#s4": {
+  "stdout": "1267650600228229401496703205376\nFalse True\n3 -4 1 2\n-3\nTrue\n"
+ },
+ "names-and-objects#p0": {
+  "stdout": "[1, 2, 3]\n"
+ },
+ "names-and-objects#p1": {
+  "stdout": "True False\n"
+ },
+ "strings#s0": {
+  "stdout": "p n yth\npy thon pto\nnohtyp\nTrue\n"
+ },
+ "strings#s1": {
+  "stdout": "make it fast\njello\n"
+ },
+ "strings#s2": {
+  "stdout": "hello, world!\n['a', 'b', '', 'c']\n['one', 'two', 'three']\n2 2 -1\nFalse True True\nheLLo True\n"
+ },
+ "strings#s3": {
+  "stdout": "97 122 b\n[3, 1, 0]\n"
+ },
+ "strings#s4": {
+  "stdout": "Ada scored 42 (66.67%)\n   42|42   |00042\nname='Ada'\n"
+ },
+ "strings#p0": {
+  "stdout": "",
+  "error": "TypeError: 'str' object does not support item assignment"
+ },
+ "strings#p1": {
+  "stdout": "True\n['10', '100', '9']\n['9', '10', '100']\n"
+ },
+ "lists#s0": {
+  "stdout": "[5, 3, 8] 1 9\n3 8 True\n"
+ },
+ "lists#s1": {
+  "stdout": "[0, 2, 4]\n[0, 'a', 'b', 'c', 3, 4, 5]\n[5, 4, 3, 'c', 'b', 'a', 0]\n"
+ },
+ "lists#s2": {
+  "stdout": "['fig', 'pear', 'kiwi', 'banana']\n['banana', 'kiwi', 'pear', 'fig']\n[3, 2, 1]\n"
+ },
+ "lists#s3": {
+  "stdout": "matching [ ]\nmatching ( )\nempty at the end: True\n"
+ },
+ "lists#s4": {
+  "stdout": "[[1, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0]]\n[0, 0, 0]\n"
+ },
+ "lists#p0": {
+  "stdout": "[[1, 0, 0], [1, 0, 0], [1, 0, 0]]\n"
+ },
+ "lists#p1": {
+  "stdout": "[4, 7]\n"
+ },
+ "lists#p2": {
+  "stdout": "None [1, 2, 3]\n"
+ },
+ "tuples#s0": {
+  "stdout": "True tuple int\n3 4 2\n"
+ },
+ "tuples#s1": {
+  "stdout": "True False\n5\nTypeError: cannot use 'list' as a set element (unhashable type: 'list')\n"
+ },
+ "tuples#s2": {
+  "stdout": "2 1\n1 9 1 [2, 3, 4] 5\nana 90\nbo 85\n"
+ },
+ "tuples#s3": {
+  "stdout": "[(1, 'coffee'), (1, 'fix bug'), (2, 'deploy'), (2, 'write tests')]\nTrue True\n"
+ },
+ "tuples#s4": {
+  "stdout": "3 4 Point(x=3, y=4)\n5.0\n"
+ },
+ "tuples#p0": {
+  "stdout": "r\ne\nd\n"
+ },
+ "tuples#p1": {
+  "stdout": "(1, [2, 3, 4])\nTypeError: unhashable type: 'list'\n"
+ },
+ "dicts-and-sets#s0": {
+  "stdout": "22 True 3\n{'bo': 22, 'cy': 19}\n['bo', 'cy'] [22, 19]\n"
+ },
+ "dicts-and-sets#s1": {
+  "stdout": "{'the': 2, 'cat': 1, 'and': 1, 'hat': 1}\n{'aet': ['eat', 'tea', 'ate'], 'ant': ['tan', 'nat']}\n"
+ },
+ "dicts-and-sets#s2": {
+  "stdout": "ana 91\nbo 78\ncy 85\n{'ana': 91, 'cy': 85} ana\n"
+ },
+ "dicts-and-sets#s3": {
+  "stdout": "duplicate 3\nduplicate 1\n{1, 2, 3, 4} {2, 3} {1} {1, 4}\n['i', 'm', 'p', 's']\n"
+ },
+ "dicts-and-sets#p0": {
+  "stdout": "",
+  "error": "KeyError: 'a'"
+ },
+ "dicts-and-sets#p1": {
+  "stdout": "",
+  "error": "RuntimeError: dictionary changed size during iteration"
+ },
+ "dicts-and-sets#p2": {
+  "stdout": "dict set\n"
+ },
+ "loops-and-iteration#s0": {
+  "stdout": "h e y \n2 6 10 \n5 3 1 \n"
+ },
+ "loops-and-iteration#s1": {
+  "stdout": "1 ana\n2 bo\n3 cy\nana: 90\nbo: 85\ncy: 77\n[(1, 'a'), (2, 'b')]\n"
+ },
+ "loops-and-iteration#s2": {
+  "stdout": "10 6 3 1 \n[2, 3, 4]\nTrue\n"
+ },
+ "loops-and-iteration#s3": {
+  "stdout": "37 is prime\npositive 1\npositive 3\n"
+ },
+ "loops-and-iteration#p0": {
+  "stdout": "[4, 3, 2, 1]\n[3, 2, 1, 0]\n"
+ },
+ "loops-and-iteration#p1": {
+  "stdout": "0 3 2 3 4 \n"
+ },
+ "functions-and-scope#s0": {
+  "stdout": "ana, 18, from Urbana\nbo, 21, from Urbana\ncy, 18, from Chicago\n2 9 5.0\n"
+ },
+ "functions-and-scope#s1": {
+  "stdout": "(1, 2, 3) {'scale': 2}\n6\n(4, 5) {}\n9\n"
+ },
+ "functions-and-scope#s2": {
+  "stdout": "(5, 15)\n"
+ },
+ "functions-and-scope#s3": {
+  "stdout": "18\n[('ana', 21), ('cy', 21), ('bo', 19)]\n42\n"
+ },
+ "functions-and-scope#s4": {
+  "stdout": "3\n"
+ },
+ "functions-and-scope#p0": {
+  "stdout": "['a']\n['a', 'b']\n"
+ },
+ "functions-and-scope#p1": {
+  "stdout": "UnboundLocalError: cannot access local variable 'best' where it is not associated with a value\n"
+ },
+ "functions-and-scope#p2": {
+  "stdout": "[2, 2, 2]\n[0, 1, 2]\n"
+ },
+ "comprehensions-and-generators#s0": {
+  "stdout": "[1, 4, 9, 16, 25, 36]\n[4, 16, 36]\n['odd', 'even', 'odd']\n"
+ },
+ "comprehensions-and-generators#s1": {
+  "stdout": "{'apple': 5, 'bob': 3, 'kayak': 5, 'tree': 4}\n['bob', 'kayak']\n2\n"
+ },
+ "comprehensions-and-generators#s2": {
+  "stdout": "[1, 2, 3, 4, 5, 6]\n[[1, 4], [2, 5], [3, 6]]\n[(0, 1), (0, 2), (1, 2)]\n"
+ },
+ "comprehensions-and-generators#s3": {
+  "stdout": "111111127777776111111\nTrue\nFalse\n2 4 [6]\n"
+ },
+ "comprehensions-and-generators#s4": {
+  "stdout": "[0, 1, 1, 2, 3, 5, 8, 13, 21, 34]\n"
+ },
+ "comprehensions-and-generators#p0": {
+  "stdout": "14\n0\n"
+ },
+ "comprehensions-and-generators#p1": {
+  "stdout": "[3, 4, 6]\n"
+ },
+ "classes#s0": {
+  "stdout": "ana 50\n"
+ },
+ "classes#s1": {
+  "stdout": "Point(1, 2) True False\n1\n"
+ },
+ "classes#s2": {
+  "stdout": "[1, 2, 3]\n1 2 3\n"
+ },
+ "classes#s3": {
+  "stdout": "Task(priority=1, name='fix bug')\nTrue\n"
+ },
+ "classes#s4": {
+  "stdout": "Circle with area 3.1\nSquare with area 9.0\n"
+ },
+ "classes#p0": {
+  "stdout": "['ana']\n"
+ },
+ "classes#p1": {
+  "stdout": "TypeError: Counter.bump() takes 0 positional arguments but 1 was given\n"
+ },
+ "errors-and-exceptions#s0": {
+  "stdout": "ZeroDivisionError - division by zero\n"
+ },
+ "errors-and-exceptions#s1": {
+  "stdout": "checked '21'\n42\nchecked 'abc'\nNone\n"
+ },
+ "errors-and-exceptions#s2": {
+  "stdout": "left: 70\nValueError amount must be positive, got -5\nInsufficientFunds need 400 more\n"
+ },
+ "errors-and-exceptions#s3": {
+  "stdout": "8080 localhost\n"
+ },
+ "errors-and-exceptions#p0": {
+  "stdout": "0\n"
+ },
+ "errors-and-exceptions#p1": {
+  "stdout": "AttributeError: 'NoneType' object has no attribute 'get'\n"
+ },
+ "complexity#s0": {
+  "stdout": "10 10 4\n1000 1000 10\n1000000 1000000 20\n"
+ },
+ "complexity#s1": {
+  "stdout": "        n  log n      n log n              n^2\n       10      3           33              100\n     1000     10         9966          1000000\n   100000     17      1660964      10000000000\n"
+ },
+ "complexity#s2": {
+  "stdout": "n <= 12       -> O(n!) or O(2^n): try every arrangement, backtracking\nn <= 25       -> O(2^n): subsets, bitmasks\nn <= 500      -> O(n^3): triple loops, interval DP\nn <= 5,000    -> O(n^2): pairs, 2D DP\nn <= 200,000  -> O(n log n) or O(n): sorting, heaps, two pointers, hashing\nn <= 10^9     -> O(log n) or O(1): binary search, math\n"
+ },
+ "complexity#s3": {
+  "stdout": "x in nums              O(n): scans the list\nx in seen              O(1) average: hashing\nnums[1:]               O(n): copies the list\nnums.pop(0)            O(n): shifts everything\ns1 + s2 (strings)      O(len): builds a new string\nsorted(nums)           O(n log n)\nmin(nums), sum(nums)   O(n) each\n"
+ },
+ "complexity#s4": {
+  "stdout": "[3, 2, 1] [3, 2, 1]\n"
+ },
+ "complexity#p0": {
+  "stdout": "555778 1667 True\n"
+ },
+ "collections#s0": {
+  "stdout": "0 4 [1, 2, 3]\n[3, 4, 5]\n"
+ },
+ "collections#s1": {
+  "stdout": "{'A': 0, 'B': 1, 'C': 1, 'D': 2, 'E': 2}\n"
+ },
+ "collections#s2": {
+  "stdout": "4 0\n[('i', 4), ('s', 4)]\nTrue\nCounter({'c': 1})\n"
+ },
+ "collections#s3": {
+  "stdout": "{'a': ['b', 'c'], 'b': ['a', 'c'], 'c': ['a', 'b']}\n{2: ['hi', 'ox'], 3: ['cat', 'dog']}\n"
+ },
+ "collections#p0": {
+  "stdout": "not there\n{'ghost': 0}\n"
+ },
+ "collections#p1": {
+  "stdout": "0 4\nTypeError: sequence index must be integer, not 'slice'\n"
+ },
+ "heaps#s0": {
+  "stdout": "1\n[1, 2, 3]\n1 4\n"
+ },
+ "heaps#s1": {
+  "stdout": "8 7\n"
+ },
+ "heaps#s2": {
+  "stdout": "1 deploy\n2 email\n2 lunch\n"
+ },
+ "heaps#s3": {
+  "stdout": "[9, 8, 7]\n[9, 8, 7]\n['fig', 'pear']\n"
+ },
+ "heaps#s4": {
+  "stdout": "[0, 1, 2, 3, 4, 5, 9, 10]\n"
+ },
+ "heaps#p0": {
+  "stdout": "[1, 10, 2, 11, 12, 3]\n3 12\n"
+ },
+ "heaps#p1": {
+  "stdout": "TypeError: '<' not supported between instances of 'dict' and 'dict'\n"
+ },
+ "sorting-and-bisect#s0": {
+  "stdout": "['bo', 'di', 'ana', 'cy']\n['ana', 'di', 'cy', 'bo']\n"
+ },
+ "sorting-and-bisect#s1": {
+  "stdout": "True\n[[1, 6], [8, 10], [15, 18]]\n"
+ },
+ "sorting-and-bisect#s2": {
+  "stdout": "1 4\n3\n4 6\n[1, 3, 3, 3, 4, 7, 9]\n"
+ },
+ "sorting-and-bisect#s3": {
+  "stdout": "1\n4\n5\n8\n"
+ },
+ "sorting-and-bisect#p0": {
+  "stdout": "(0, 20)\n"
+ },
+ "sorting-and-bisect#p1": {
+  "stdout": "2\n"
+ },
+ "recursion-and-memoization#s0": {
+  "stdout": "10\n1073741824 243\n"
+ },
+ "recursion-and-memoization#s1": {
+  "stdout": "fact(3)\n  fact(2)\n    fact(1)\n    -> 1\n  -> 2\n-> 6\n"
+ },
+ "recursion-and-memoization#s2": {
+  "stdout": "10 177\n20 21891\n25 242785\n"
+ },
+ "recursion-and-memoization#s3": {
+  "stdout": "2880067194370816120\n[1, 2, 3, 5, 8, 13, 21]\n"
+ },
+ "recursion-and-memoization#s4": {
+  "stdout": "1346269 1346269\n"
+ },
+ "recursion-and-memoization#p0": {
+  "stdout": "RecursionError: maximum recursion depth exceeded\n"
+ },
+ "recursion-and-memoization#p1": {
+  "stdout": "TypeError: unhashable type: 'list'\n3\n"
+ },
+ "idioms#s0": {
+  "stdout": "[0, 3, 4, 8, 9, 14, 23, 25]\n10 10\n[3, 3, 4, 4, 5, 9, 9]\n"
+ },
+ "idioms#s1": {
+  "stdout": "[('a', 'b'), ('a', 'c'), ('b', 'c')]\n24\n[(0, 0), (0, 1), (1, 0), (1, 1)]\n[(1, 4), (2, 3)]\n"
+ },
+ "idioms#s2": {
+  "stdout": "[[1, 4], [2, 5], [3, 6]]\n[[4, 1], [5, 2], [6, 3]]\n[(1, 1), (0, 2), (0, 0)]\n"
+ },
+ "idioms#s3": {
+  "stdout": "2 15\n3 True\n0 10\n[1, 2, 3]\n5 24 1000000007\n"
+ },
+ "idioms#s4": {
+  "stdout": "[('a', 3), ('b', 1), ('c', 2), ('d', 4)]\n4\n"
+ },
+ "idioms#p0": {
+  "stdout": "[('a', ['apple']), ('b', ['bob']), ('a', ['avocado']), ('b', ['banana'])]\n[('a', ['apple', 'avocado']), ('b', ['banana', 'bob'])]\n"
+ },
+ "idioms#p1": {
+  "stdout": "8\n10\n"
+ },
+ "two-pointers#s0": {
+  "stdout": "i=0 j=5 sum=12\ni=0 j=4 sum=9\ni=1 j=4 sum=11\ni=1 j=3 sum=9\ni=2 j=3 sum=10\n(4, 6)\n"
+ },
+ "two-pointers#s1": {
+  "stdout": "[4, 9, 9, 49, 121]\n"
+ },
+ "two-pointers#s2": {
+  "stdout": "(3, [2, 2, 4])\n"
+ },
+ "two-pointers#p0": {
+  "stdout": "False but 2 + 3 == 5\n"
+ },
+ "sliding-window#s0": {
+  "stdout": "9\n"
+ },
+ "sliding-window#s1": {
+  "stdout": "3\n2\n"
+ },
+ "sliding-window#s2": {
+  "stdout": "valid window [2, 3, 1, 2]\nvalid window [3, 1, 2, 4]\nvalid window [1, 2, 4]\nvalid window [2, 4, 3]\nvalid window [4, 3]\n2\n"
+ },
+ "sliding-window#p0": {
+  "stdout": "inf but [4, 6] has length 2\n"
+ },
+ "binary-search-on-answer#s0": {
+  "stdout": "1\n3\n"
+ },
+ "binary-search-on-answer#s1": {
+  "stdout": "5\n44\n"
+ },
+ "binary-search-on-answer#s2": {
+  "stdout": "0\n1\n"
+ },
+ "binary-search-on-answer#p0": {
+  "stdout": "5 but index 1 holds 8\n"
+ },
+ "hashing-and-prefix-sums#s0": {
+  "stdout": "True\nFalse\n"
+ },
+ "hashing-and-prefix-sums#s1": {
+  "stdout": "4\n2\n"
+ },
+ "hashing-and-prefix-sums#s2": {
+  "stdout": "x= 3 total= 3 found_so_far=0\nx= 4 total= 7 found_so_far=1\nx= 7 total=14 found_so_far=2\nx= 2 total=16 found_so_far=2\nx=-3 total=13 found_so_far=2\nx= 1 total=14 found_so_far=3\nx= 4 total=18 found_so_far=3\nx= 2 total=20 found_so_far=4\n"
+ },
+ "hashing-and-prefix-sums#p0": {
+  "stdout": "0 but [2, 3] itself sums to 5\n"
+ },
+ "stacks#s0": {
+  "stdout": "[True, False, False, True]\n"
+ },
+ "stacks#s1": {
+  "stdout": "after 2: waiting [2]\nafter 1: waiting [2, 1]\nafter 2: waiting [2, 2]\nafter 4: waiting [4]\nafter 3: waiting [4, 3]\n[4, 2, 4, -1, -1]\n"
+ },
+ "stacks#s2": {
+  "stdout": "14\n-3\n"
+ },
+ "stacks#p0": {
+  "stdout": "IndexError: pop from empty list\n"
+ },
+ "linked-lists#s0": {
+  "stdout": "[1, 2, 3]\n"
+ },
+ "linked-lists#s1": {
+  "stdout": "3 3\nFalse True\n"
+ },
+ "linked-lists#s2": {
+  "stdout": "[1, 2, 3]\n"
+ },
+ "linked-lists#p0": {
+  "stdout": "None\n"
+ },
+ "trees#s0": {
+  "stdout": "3 9 20 15\n"
+ },
+ "trees#s1": {
+  "stdout": "15 3\n"
+ },
+ "trees#s2": {
+  "stdout": "[(1, 2, 5), (1, 3)]\n"
+ },
+ "trees#s3": {
+  "stdout": "[3.0, 14.5, 11.0]\n"
+ },
+ "trees#p0": {
+  "stdout": "True but 8 sits in the left subtree of 5\n"
+ },
+ "graphs#s0": {
+  "stdout": "0 [1, 2]\n1 [0, 3]\n2 [0, 3]\n3 [1, 2]\n4 [5]\n5 [4]\n"
+ },
+ "graphs#s1": {
+  "stdout": "7\n-1\n"
+ },
+ "graphs#s2": {
+  "stdout": "3\n"
+ },
+ "graphs#s3": {
+  "stdout": "['intro', 'dsa', 'ml', 'algo']\nNone\n"
+ },
+ "graphs#p0": {
+  "stdout": "181 pushes for only 100 cells\n"
+ },
+ "heap-patterns#s0": {
+  "stdout": "['i', 'love']\n"
+ },
+ "heap-patterns#s1": {
+  "stdout": "[2, 3, 5, 6, 8, 9, 10]\n"
+ },
+ "heap-patterns#s2": {
+  "stdout": "[0, 1, 2, 3, 4, 5, 6, 7, 9]\n"
+ },
+ "heap-patterns#s3": {
+  "stdout": "5 5\n15 10.0\n1 5\n3 4.0\n8 5\n"
+ },
+ "heap-patterns#p0": {
+  "stdout": "True\n"
+ },
+ "backtracking#s0": {
+  "stdout": "[[], [1], [1, 2], [1, 2, 3], [1, 3], [2], [2, 3], [3]]\n"
+ },
+ "backtracking#s1": {
+  "stdout": "choose a\n  choose b\n    choose c\n  choose c\n    choose b\nchoose b\n  choose a\n    choose c\n  choose c\n    choose a\nchoose c\n  choose a\n    choose b\n  choose b\n    choose a\n['abc', 'acb', 'bac', 'bca', 'cab', 'cba']\n"
+ },
+ "backtracking#s2": {
+  "stdout": "['000', '001', '010', '100', '101']\n144 of 1024\n"
+ },
+ "backtracking#p0": {
+  "stdout": "[[], [], [], []]\n"
+ },
+ "backtracking#p1": {
+  "stdout": "[[], [1], [1, 2], [1, 2, 3], [1, 2, 3, 3], [1, 2, 3, 3, 2], [1, 2, 3, 3, 2, 3], [1, 2, 3, 3, 2, 3, 3]]\n"
+ },
+ "dynamic-programming#s0": {
+  "stdout": "[1, 1, 1, 2, 3, 5, 8, 12, 19]\n35543051\n"
+ },
+ "dynamic-programming#s1": {
+  "stdout": "[1, 4, 5]\n[2, 7, 6]\n[6, 8, 7]\n7\n"
+ },
+ "dynamic-programming#s2": {
+  "stdout": "9\n"
+ },
+ "dynamic-programming#s3": {
+  "stdout": "3 0\n"
+ },
+ "dynamic-programming#p0": {
+  "stdout": "9 but there is only one item worth 3\n"
+ },
+ "dynamic-programming#p1": {
+  "stdout": "IndexError: list assignment index out of range\n"
+ },
+ "intervals-and-greedy#s0": {
+  "stdout": "6\n"
+ },
+ "intervals-and-greedy#s1": {
+  "stdout": "2\n1\n"
+ },
+ "intervals-and-greedy#s2": {
+  "stdout": "3\n"
+ },
+ "intervals-and-greedy#s3": {
+  "stdout": "6\n3 but 3 + 3 uses 2 coins\n"
+ },
+ "intervals-and-greedy#p0": {
+  "stdout": "[[5, 6]]\n"
+ },
+ "union-find-and-trie#s0": {
+  "stdout": "3 True False\nFalse (already connected)\n"
+ },
+ "union-find-and-trie#s1": {
+  "stdout": "[1, 4]\n[2, 3]\n"
+ },
+ "union-find-and-trie#s2": {
+  "stdout": "True False True False\n"
+ },
+ "union-find-and-trie#s3": {
+  "stdout": "4 3 1 0\n"
+ },
+ "union-find-and-trie#p0": {
+  "stdout": "[2, 1, 2, 3] 0 and 1 are no longer connected\n"
+ }
+}

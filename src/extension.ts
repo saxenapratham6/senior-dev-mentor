@@ -5,11 +5,12 @@ import { ProgressStore } from "./progress";
 import { findNudges } from "./heuristics";
 import { EditorPanda, plain } from "./editorPanda";
 import type { PandaBoard } from "./board";
+import type { Classroom } from "./classroom";
 
 const NUDGE_LANGUAGES = new Set(["python", "javascript", "typescript", "java", "c", "cpp", "csharp", "go", "rust"]);
 
 /** Returned so the integration tests can reach the panda; not a public API. */
-export function activate(context: vscode.ExtensionContext): { panda: EditorPanda; board: PandaBoard } {
+export function activate(context: vscode.ExtensionContext): { panda: EditorPanda; board: PandaBoard; classroom: Classroom } {
   const progress = new ProgressStore(context.globalState);
   let mentor: MentorViewProvider | undefined;
   const panda = new EditorPanda(context.extensionUri, (where) => mentor?.pandaMoved(where));
@@ -28,6 +29,7 @@ export function activate(context: vscode.ExtensionContext): { panda: EditorPanda
     vscode.commands.registerCommand("seniorDevMentor.showMe", () => mentor.showMeFromEditor()),
     vscode.commands.registerCommand("seniorDevMentor.wrapUp", () => mentor.wrapUp()),
     vscode.commands.registerCommand("seniorDevMentor.roadmap", () => mentor.showRoadmap()),
+    vscode.commands.registerCommand("seniorDevMentor.openLesson", (id?: string) => (id ? mentor.showLesson(id) : mentor.showRoadmap())),
     vscode.commands.registerCommand("seniorDevMentor.pandaNext", () => panda.next()),
     vscode.commands.registerCommand("seniorDevMentor.pandaDismiss", () => panda.dismiss()),
     vscode.commands.registerCommand("seniorDevMentor.pandaAsk", () => {
@@ -75,7 +77,7 @@ export function activate(context: vscode.ExtensionContext): { panda: EditorPanda
       })();
     }),
   );
-  return { panda, board: mentor.board };
+  return { panda, board: mentor.board, classroom: mentor.classroom };
 }
 
 export function deactivate(): void {}

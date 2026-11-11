@@ -103,6 +103,45 @@ exports.run = async function () {
     api.board.dispose();
   });
 
+  await check("all 29 lessons load from the packaged extension", async () => {
+    assert.equal(api.classroom.lessons.length, 29);
+    assert.equal(api.classroom.phases[0].items[0].lesson, "names-and-objects");
+  });
+
+  await check("a lesson example runs with real Python", async () => {
+    const r = await api.classroom.runExample("tuples#s2");
+    assert.equal(r.error, undefined);
+    assert.match(r.stdout, /^2 1\n/);
+  });
+
+  await check("an exercise opens as a practice file, fails, then passes with a correct solution", async () => {
+    const ed = await api.classroom.openExercise("tuples", "count-visits");
+    assert.ok(ed && ed.document.fileName.endsWith(path.join("python-practice", "count-visits.py")), ed && ed.document.fileName);
+    const before = await api.classroom.checkExercise("tuples", "count-visits");
+    assert.ok(before.failed > 0, `starter should fail (passed ${before.passed})`);
+    const solution = fs.readFileSync(path.join(__dirname, "..", "solutions", "count-visits.py"), "utf8");
+    const text = ed.document.getText();
+    const start = text.indexOf("def cells_visited");
+    const end = text.indexOf("# ---- Checks");
+    await ed.edit((e) => e.replace(new vscode.Range(ed.document.positionAt(start), ed.document.positionAt(end)), solution + "\n\n"));
+    const after = await api.classroom.checkExercise("tuples", "count-visits");
+    assert.equal(after.failed, 0, after.lines.join("; "));
+    assert.equal(after.passed, 5);
+    assert.equal(ed.document.isDirty, false, "Check saved the file first");
+  });
+
+  await check("reopening an exercise keeps your work", async () => {
+    const ed = await api.classroom.openExercise("tuples", "count-visits");
+    assert.match(ed.document.getText(), /seen = \{\(r, c\)\}/);
+  });
+
+  await check("the lesson command opens a lesson on the board", async () => {
+    await vscode.commands.executeCommand("seniorDevMentor.openLesson", "two-pointers");
+    await sleep(600);
+    assert.equal(api.board.isOpen, true);
+    api.board.dispose();
+  });
+
   console.log("\n" + results.join("\n") + "\n");
   if (results.some((r) => r.startsWith("FAIL"))) throw new Error("integration checks failed");
 };

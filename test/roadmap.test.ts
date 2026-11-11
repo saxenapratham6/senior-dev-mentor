@@ -1,65 +1,60 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { ROADMAP, emptyRoadmapState, toggleItem, addSolved, roadmapProgress, isRoadmapLink } from "../src/roadmap";
+import path from "node:path";
+import { loadLessons } from "../src/lessons/index";
+import { buildRoadmap, emptyRoadmapState, toggleItem, addSolved, toggleLadder, markPassed, roadmapProgress, isRoadmapLink, leetcodeUrl } from "../src/roadmap";
 import { classifyRequest } from "../src/guardrails";
 
-test("every roadmap item has a unique id and every link is allowed", () => {
-  const ids = ROADMAP.flatMap((p) => p.items.map((i) => i.id));
+const lessons = loadLessons(path.join(__dirname, "..", "lessons"));
+const phases = buildRoadmap(lessons);
+
+test("the roadmap is the three lesson units, then the courses", () => {
+  assert.deepEqual(phases.map((p) => p.id), ["unit1", "unit2", "unit3", "next"]);
+  assert.deepEqual(phases.slice(0, 3).map((p) => p.items.length), [10, 6, 13]);
+  assert.ok(phases[0].items.every((i) => i.lesson && !i.url), "lessons are built in, not links");
+  const ids = phases.flatMap((p) => p.items.map((i) => i.id));
   assert.equal(new Set(ids).size, ids.length);
-  for (const p of ROADMAP) for (const i of p.items) if (i.url) assert.ok(isRoadmapLink(i.url), i.url);
-  assert.equal(ROADMAP.find((p) => p.id === "p4")!.items.filter((i) => i.id.startsWith("p4-") && i.title !== "Grokking Dynamic Programming Interview in Python").length, 29, "29 Grokking patterns (the 30th module is the challenge set)");
+  for (const i of phases.flatMap((p) => p.items)) {
+    if (i.url) assert.ok(isRoadmapLink(i.url), i.url);
+    assert.equal(classifyRequest(i.title).kind, "allowed", `"${i.title}" passes the request filter`);
+  }
 });
 
-test("progress follows checkboxes and points at the next step", () => {
+test("progress follows finished lessons and points at the next one", () => {
   let s = emptyRoadmapState(0);
-  let p = roadmapProgress(s);
-  assert.equal(p.doneItems, 0);
-  assert.equal(p.currentPhase, "p1", "the roadmap starts with Python foundations");
-  assert.equal(p.next!.id, "p1-learn");
+  let p = roadmapProgress(s, phases);
+  assert.equal(p.currentPhase, "unit1");
+  assert.equal(p.next!.id, "lesson:names-and-objects");
 
-  for (const id of ["p1-learn", "p1-guide-a", "p1-quickcart"]) s = toggleItem(s, id);
-  p = roadmapProgress(s);
-  assert.equal(p.currentPhase, "p2", "a finished phase moves you on");
-  assert.equal(p.phases[0].done, 3);
+  for (const item of phases[0].items) s = toggleItem(s, item.id, phases);
+  p = roadmapProgress(s, phases);
+  assert.equal(p.currentPhase, "unit2", "finishing Unit 1 moves you on");
+  assert.equal(p.phases[0].done, 10);
 
-  s = toggleItem(s, "p1-learn");
-  assert.equal(roadmapProgress(s).next!.id, "p1-learn", "unchecking goes back");
-  assert.deepEqual(toggleItem(s, "made-up"), s, "unknown ids are ignored");
-
-  const all = ROADMAP.flatMap((ph) => ph.items.map((i) => i.id)).reduce((st, id) => (st.done.includes(id) ? st : toggleItem(st, id)), s);
-  const fin = roadmapProgress(all);
-  assert.equal(fin.percent, 100);
-  assert.equal(fin.currentPhase, null);
-  assert.equal(fin.next, null);
+  s = toggleItem(s, "lesson:names-and-objects", phases);
+  assert.equal(roadmapProgress(s, phases).next!.id, "lesson:names-and-objects", "unchecking goes back");
+  assert.deepEqual(toggleItem(s, "made-up", phases), s, "unknown ids are ignored");
 });
 
-test("solved counters never go negative and drive the milestones", () => {
-  let s = addSolved(emptyRoadmapState(0), "easy", -1);
-  assert.equal(s.solved.easy, 0);
-  for (let i = 0; i < 149; i++) s = addSolved(s, "medium", 1);
-  assert.equal(roadmapProgress(s).nextMilestone!.count, 150);
-  s = addSolved(s, "hard", 1);
-  assert.equal(roadmapProgress(s).solvedTotal, 150);
-  assert.equal(roadmapProgress(s).nextMilestone!.count, 250);
+test("ladder problems drive the solved counters", () => {
+  let s = emptyRoadmapState(0);
+  s = toggleLadder(s, lessons, "two-pointers", "3Sum");
+  s = toggleLadder(s, lessons, "two-pointers", "Trapping Rain Water");
+  assert.deepEqual(s.solved, { easy: 0, medium: 1, hard: 1 });
+  s = toggleLadder(s, lessons, "two-pointers", "3Sum");
+  assert.deepEqual(s.solved, { easy: 0, medium: 0, hard: 1 }, "unticking takes it back off");
+  assert.deepEqual(toggleLadder(s, lessons, "two-pointers", "Not A Problem"), s, "unknown problems are ignored");
+  assert.equal(addSolved(emptyRoadmapState(0), "easy", -1).solved.easy, 0, "counters never go negative");
 });
 
-test("links outside Educative and LeetCode are refused", () => {
-  assert.equal(isRoadmapLink("https://www.educative.io/unlimited"), true);
-  assert.equal(isRoadmapLink("http://www.educative.io/unlimited"), false);
+test("passed exercises are recorded once", () => {
+  const s = markPassed(markPassed(emptyRoadmapState(0), "spiral"), "spiral");
+  assert.deepEqual(s.passed, ["spiral"]);
+});
+
+test("LeetCode links use LeetCode's slugs and only safe hosts open", () => {
+  assert.equal(leetcodeUrl("Two Sum II - Input Array Is Sorted"), "https://leetcode.com/problems/two-sum-ii-input-array-is-sorted/");
+  assert.equal(leetcodeUrl("Implement Trie (Prefix Tree)"), "https://leetcode.com/problems/implement-trie-prefix-tree/");
   assert.equal(isRoadmapLink("https://evil.example.com/educative.io"), false);
   assert.equal(isRoadmapLink("javascript:alert(1)"), false);
-});
-
-test("every Python step has a study guide, and every step can be sent to Guide me", () => {
-  for (const phase of ROADMAP.filter((p) => p.id === "p1" || p.id === "p2")) {
-    for (const item of phase.items) {
-      assert.ok(item.guide, `${item.id} has a guide`);
-      assert.ok(item.guide!.focus.length >= 2 && item.guide!.checkpoints.length >= 2 && item.guide!.practice.length > 20, item.id);
-      assert.doesNotMatch(JSON.stringify(item.guide), /```/, "guides contain no code blocks");
-    }
-  }
-  for (const item of ROADMAP.flatMap((p) => p.items)) {
-    assert.equal(classifyRequest(item.title).kind, "allowed", `"${item.title}" passes the request filter`);
-  }
-  assert.ok(!ROADMAP.some((p) => p.id === "p0"), "the access phase is gone");
 });

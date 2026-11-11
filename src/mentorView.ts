@@ -11,7 +11,10 @@ import { OllamaProvider } from "./providers/ollama";
 import { normalizeScene, scenePrompt, SceneSchema, extractLineRefs } from "./scene";
 import { EditorPanda, PandaWhereabouts } from "./editorPanda";
 import { PandaBoard } from "./board";
-import { ROADMAP, PROBLEM_MILESTONES, RoadmapState, emptyRoadmapState, toggleItem, addSolved, roadmapProgress, isRoadmapLink } from "./roadmap";
+import { PROBLEM_MILESTONES, RoadmapState, emptyRoadmapState, toggleItem, addSolved, toggleLadder, markPassed, roadmapProgress, isRoadmapLink, leetcodeUrl } from "./roadmap";
+import { Classroom } from "./classroom";
+import type { LessonAction } from "./board";
+import { UNITS } from "./lessons/types";
 import {
   SessionLog,
   newSessionLog,
@@ -71,7 +74,9 @@ export class MentorViewProvider implements vscode.WebviewViewProvider {
   private pending: unknown[] = [];
   private session: SessionLog = newSessionLog();
   private lastSummary?: { summary: Summary; stats: SessionStats };
+  private openLessonId?: string;
   readonly board: PandaBoard;
+  readonly classroom: Classroom;
 
   constructor(
     private readonly ctx: vscode.ExtensionContext,
@@ -79,6 +84,7 @@ export class MentorViewProvider implements vscode.WebviewViewProvider {
     private readonly panda: EditorPanda,
   ) {
     this.lastEditor = vscode.window.activeTextEditor;
+    this.classroom = new Classroom(ctx);
     this.board = new PandaBoard(ctx.extensionUri, {
       onOpen: () => void this.panda.stepOut(),
       onClose: () => this.panda.stepIn(),
@@ -86,9 +92,10 @@ export class MentorViewProvider implements vscode.WebviewViewProvider {
       onSaveNotes: () => void this.saveNotes(),
       onFix: (action) => void vscode.commands.executeCommand(action === "setApiKey" ? "seniorDevMentor.setApiKey" : "workbench.action.openSettings", action === "setApiKey" ? undefined : "seniorDevMentor"),
       onExample: (name) => this.log("visualized", name, () => this.session.visualized.push(name)),
-      onRoadmapToggle: (id) => void this.updateRoadmap((st) => toggleItem(st, id)),
+      onRoadmapToggle: (id) => void this.updateRoadmap((st) => toggleItem(st, id, this.classroom.phases)),
       onRoadmapSolved: (difficulty, delta) => void this.updateRoadmap((st) => addSolved(st, difficulty, delta)),
       onGuideMe: (id) => void this.guideMe(id),
+      onLesson: (action) => void this.onLesson(action),
       onOpenUrl: (url) => {
         if (isRoadmapLink(url)) void vscode.env.openExternal(vscode.Uri.parse(url));
       },
@@ -416,32 +423,114 @@ export class MentorViewProvider implements vscode.WebviewViewProvider {
 
   /** The panda presents your study roadmap on its board. */
   showRoadmap(): void {
+    this.openLessonId = undefined;
     const state = this.roadmapState();
-    this.board.show({ type: "roadmap", phases: ROADMAP, state, progress: roadmapProgress(state), milestones: PROBLEM_MILESTONES });
+    const phases = this.classroom.phases;
+    this.board.show({ type: "roadmap", phases, state, progress: roadmapProgress(state, phases), milestones: PROBLEM_MILESTONES });
   }
 
-  private async updateRoadmap(change: (st: RoadmapState) => RoadmapState): Promise<void> {
-    const before = roadmapProgress(this.roadmapState());
+  private async updateRoadmap(change: (st: RoadmapState) => RoadmapState, redraw: "roadmap" | "lesson" = "roadmap"): Promise<RoadmapState> {
+    const phases = this.classroom.phases;
+    const before = roadmapProgress(this.roadmapState(), phases);
     const state = change(this.roadmapState());
     await this.ctx.globalState.update(ROADMAP_KEY, state);
-    const after = roadmapProgress(state);
-    this.board.show({ type: "roadmap", phases: ROADMAP, state, progress: after, milestones: PROBLEM_MILESTONES });
-    // Finishing a phase or reaching a problem milestone is worth a cheer.
+    const after = roadmapProgress(state, phases);
+    if (redraw === "roadmap") this.board.show({ type: "roadmap", phases, state, progress: after, milestones: PROBLEM_MILESTONES });
     const finished = after.phases.find((p, i) => p.done === p.total && before.phases[i].done < before.phases[i].total);
-    if (finished) this.log("roadmap", `finished ${ROADMAP.find((p) => p.id === finished.id)!.title}`);
+    if (finished) this.log("roadmap", `finished ${phases.find((p) => p.id === finished.id)!.title}`);
     if (before.nextMilestone && after.solvedTotal >= before.nextMilestone.count) this.log("roadmap", `${before.nextMilestone.count} problems solved`);
+    return state;
   }
 
   /** "Guide me" on a roadmap step: a mentor session about that step, in the chat. */
   private async guideMe(id: string): Promise<void> {
-    const phase = ROADMAP.find((p) => p.items.some((i) => i.id === id));
+    const phase = this.classroom.phases.find((p) => p.items.some((i) => i.id === id));
     const item = phase?.items.find((i) => i.id === id);
     if (!phase || !item) return;
     await vscode.commands.executeCommand("seniorDevMentor.view.focus");
-    const about = [`"${item.title}" in my "${phase.title}" phase.`, item.detail, item.guide ? `Focus areas: ${item.guide.focus.join("; ")}.` : ""]
+    const lesson = item.lesson ? this.classroom.lesson(item.lesson) : undefined;
+    const about = [`"${item.title}" in my "${phase.title}" phase.`, item.detail, lesson ? `The lesson covers: ${lesson.sections.map((s) => s.heading).join("; ")}.` : ""]
       .filter(Boolean)
       .join(" ");
     await this.ask("guide", item.title, about);
+  }
+
+  // -------------------------------------------------------------- lessons
+
+  /** Open a lesson on the board. */
+  showLesson(id: string): void {
+    const lesson = this.classroom.lesson(id);
+    if (!lesson) return;
+    this.openLessonId = id;
+    const state = this.roadmapState();
+    const ladderUrls = Object.fromEntries((lesson.ladder ?? []).map((p) => [p.name, leetcodeUrl(p.name)]));
+    this.board.show({
+      type: "lesson",
+      lesson,
+      unitTitle: `Unit ${lesson.unit} · ${UNITS[lesson.unit].title}`,
+      saved: this.classroom.savedOutputs(lesson),
+      nav: this.classroom.neighbors(id),
+      done: state.done.includes(`lesson:${id}`),
+      passed: state.passed,
+      ladder: state.ladder,
+      ladderUrls,
+    });
+    this.log("lesson", lesson.title);
+  }
+
+  private sendLessonState(state: RoadmapState): void {
+    if (!this.openLessonId) return;
+    this.board.show({ type: "lessonState", done: state.done.includes(`lesson:${this.openLessonId}`), passed: state.passed, ladder: state.ladder });
+  }
+
+  private async onLesson(a: LessonAction): Promise<void> {
+    switch (a.type) {
+      case "openLesson":
+        return this.showLesson(a.id);
+      case "backToRoadmap":
+        return this.showRoadmap();
+      case "runExample": {
+        const result = await this.classroom.runExample(a.id);
+        this.board.show({ type: "runResult", exampleId: a.id, result });
+        return;
+      }
+      case "exampleInEditor":
+        return this.classroom.openExampleInEditor(a.id);
+      case "startExercise":
+        await this.classroom.openExercise(a.lessonId, a.exerciseId, this.lastEditor?.viewColumn);
+        this.log("exercise", `started ${a.exerciseId}`);
+        return;
+      case "checkExercise": {
+        const result = await this.classroom.checkExercise(a.lessonId, a.exerciseId);
+        this.board.show({ type: "checkResult", exerciseId: a.exerciseId, result });
+        const total = result.passed + result.failed;
+        if (total && result.failed === 0) {
+          const state = await this.updateRoadmap((st) => markPassed(st, a.exerciseId), "lesson");
+          this.sendLessonState(state);
+          this.log("exercise", `all ${total} checks pass: ${a.exerciseId}`);
+        } else {
+          this.log("exercise", `${result.passed}/${total} checks: ${a.exerciseId}`);
+        }
+        return;
+      }
+      case "exerciseHint": {
+        await this.classroom.openExercise(a.lessonId, a.exerciseId, this.lastEditor?.viewColumn);
+        await this.run("hint", "");
+        return;
+      }
+      case "lessonDone": {
+        const state = await this.updateRoadmap((st) => toggleItem(st, `lesson:${a.id}`, this.classroom.phases), "lesson");
+        this.sendLessonState(state);
+        return;
+      }
+      case "ladderToggle": {
+        const state = await this.updateRoadmap((st) => toggleLadder(st, this.classroom.lessons, a.lessonId, a.name), "lesson");
+        this.sendLessonState(state);
+        return;
+      }
+      case "askAboutLesson":
+        return this.guideMe(`lesson:${a.id}`);
+    }
   }
 
   /** "Show me" from the editor's context menu or the command palette. */

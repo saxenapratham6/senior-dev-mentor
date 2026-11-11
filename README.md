@@ -20,8 +20,17 @@ A panda lives in your code editor, and the sidebar is just a conversation.
 | **Quiz** | Questions about the code you just wrote: predict the output, the complexity, an edge case. |
 | **Show me** | The panda draws on its **board**, a panel beside your code. Type an idea ("reversing a linked list", "collisions in a hash map", "BFS"), or select your code to watch it run with a small input. Arrays, linked lists, stacks, queues, trees, graphs, hash tables and variables animate step by step; the panda walks to the part of the diagram that's changing, explains it, and asks you to predict the next move. Sorting and searching examples work offline. |
 | **Wrap up** | Done for the day, or with a plan? The panda puts your session on its board: what you worked on, what you figured out, how your plan went, what's still fuzzy, and what to try next. **Save as notes** writes it to a Markdown file. |
-| **My roadmap** | The map button opens a study plan on the panda's board, from Python basics to company-specific interview prep, built from Educative's catalog: Python foundations and mastery, data structures and algorithms, the 29 Grokking coding patterns, Grind 75 and Blind 75 review, and Speedrun paths for Google, Meta, Apple, Microsoft, Netflix, LinkedIn and Oracle. Each Python step has a study guide (what to focus on, questions to check yourself, an exercise to try in your editor), and every step has **Guide me**, which talks it through with the mentor. Tick off steps, count the problems you solve by difficulty, and the panda tells you where you are and what's next. Progress is saved in VS Code. |
+| **Lessons** | 29 built-in lessons on the panda's board take you from Python basics to hard LeetCode. **Python core** (names and objects, strings, lists, tuples, dicts and sets, loops, functions, comprehensions, classes, errors), **Python for problem solving** (Big-O, deque/Counter/defaultdict, heaps, sorting and binary search, recursion and memoization, idioms) and **13 problem-solving patterns** (two pointers, sliding window, binary search on the answer, hashing and prefix sums, stacks, linked lists, trees, graphs, heaps, backtracking, dynamic programming, intervals and greedy, union-find and tries). Each lesson explains the *why* (like when to choose a tuple over a list), has runnable examples you predict before running, common mistakes, a quick quiz, and exercises that open as practice files with built-in checks. **Check** runs them and tells you how many pass. It never shows the answer. Pattern lessons end with a LeetCode ladder from easy to hard. |
+| **My roadmap** | The map button shows your path through the lessons, then the courses you're ready for afterwards (Grokking the Coding Interview Patterns, Grind 75, company Speedrun paths). It tracks finished lessons, passed exercises and LeetCode problems solved by difficulty, and the panda tells you what's next. Progress is saved in VS Code. |
 | **Save nudges** | On save, the panda may walk over to a pattern it noticed (nested loops, recursion with no base case, swallowed exceptions, very long functions) and ask one question. No AI is involved, and it never scrolls your editor on its own. |
+
+## Lessons you can trust
+
+Lessons are Markdown files in [`lessons/`](lessons/), one per lesson, so anyone can add or fix one. They're checked automatically:
+
+- Every example's output is produced by running it with Python (`npm run lessons`), and a test fails if any output changes.
+- Every exercise is tested both ways: the starter must fail its checks, and a reference solution (kept in `test/solutions/`, not shipped) must pass them all.
+- Every LeetCode ladder problem was checked against LeetCode for its exact title, difficulty, and that it's free to solve.
 
 ## Guardrails are code, not a prompt
 
@@ -65,6 +74,7 @@ The limits are unit-tested (`npm test`). In a live test, a small local model ign
 | `seniorDevMentor.nudgeOnSave` | `true` | Panda questions on save |
 | `seniorDevMentor.mascot` | `true` | Show the panda in your editor |
 | `seniorDevMentor.pandaFollowsCursor` | `true` | The panda strolls to your line when you pause |
+| `seniorDevMentor.pythonPath` | `""` | Python for running lesson examples and checking exercises (default `python3`, or `python` on Windows) |
 
 ## Icons
 
@@ -74,7 +84,8 @@ The interface uses [Codicons](https://github.com/microsoft/vscode-codicons), the
 
 ```bash
 npm install
-npm test          # guardrails, hint ladder, heuristics, scenes, visualizer
+npm run lessons   # re-run every lesson example and save its output
+npm test          # guardrails, hint ladder, lessons, exercises, scenes, roadmap
 npm run build     # bundles to dist/extension.js
 npm run test:vscode   # editor-panda checks inside a real VS Code (uses your installed copy)
 ```
@@ -89,6 +100,8 @@ src/
   scene.ts          "Show me" scene schema, validation, line references
   summary.ts        the wrap-up: session log, schema, notes export
   roadmap.ts        the study roadmap and its progress (pure, tested)
+  classroom.ts      lessons at runtime: run examples, create and check practice files
+  lessons/          lesson parser, Python runner, practice-file format
   board.ts          the panda's board panel
   editorPanda.ts    the panda in the editor: follow, sleep, think, walk, speak
   pandaPlacement.ts where the panda and its bubble go (pure, tested)
@@ -96,6 +109,8 @@ src/
   heuristics.ts     no-AI code observations for save nudges
   prompts.ts        the mentor's teaching style
   providers/        Claude (Anthropic SDK) and Ollama
+lessons/            the 29 lessons, as Markdown
+test/solutions/     reference solutions for every exercise (tests only)
 media/              sidebar chat, the board, scene player, algorithm steps
 media/panda/        panda poses (sit, walk, think, talk, cheer, sleep)
 test/               node:test suites
