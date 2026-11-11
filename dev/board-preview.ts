@@ -13,6 +13,8 @@ import { buildRepoTour, flatStops } from "../src/tour/tour";
 import { repoView, tourView } from "../src/tour/view";
 import { normalizeAiTour, normalizeOverview } from "../src/tour/ai/normalize";
 import { planSend, estimateCost } from "../src/tour/ai/digest";
+import { traceStarts, buildTrace, traceTour } from "../src/tour/trace";
+import { deployReport } from "../src/deploy/report";
 
 const root = path.join(__dirname, "..");
 const src = readFileSync(path.join(root, "src/board.ts"), "utf8");
@@ -55,12 +57,17 @@ const LESSONS = ${JSON.stringify(lessonMsgs)};
 const OUTPUTS = ${JSON.stringify(outputs)};
 const REPO = __REPO__;
 const AI_REPO = __AIREPO__;
+const TRACE = __TRACE__;
+const DEPLOY = __DEPLOY__;
 window.acquireVsCodeApi = () => ({
   postMessage(m) {
     console.log("to extension", m);
     const reply = (x) => window.postMessage(x, "*");
     const params = new URLSearchParams(location.search);
     const want = params.get("lesson");
+    if (m.type === "ready" && params.has("trace")) return reply({ ...TRACE, at: Number(params.get("at") ?? -1) });
+    if (m.type === "ready" && params.has("deploy")) return reply(DEPLOY);
+    if (m.type === "deployTarget") reply({ ...DEPLOY, report: { ...DEPLOY.report, chosen: m.id } });
     if (m.type === "ready") reply(params.has("ai") ? { ...AI_REPO, at: Number(params.get("at") ?? -1) } : params.has("repo") ? { ...REPO, at: Number(params.get("at") ?? -1) } : want ? LESSONS[want] : ROADMAP);
     if (m.type === "aiTour") { reply({ ...REPO, ai: { ...REPO.ai, state: "working", text: "Reading 4 files… (0/4 read)" } }); setTimeout(() => reply({ type: "aiProgress", text: "Drawing the big picture…" }), 900); }
     if (m.type === "tourStart") reply({ type: "tourAt", stop: 0 });
@@ -133,10 +140,14 @@ const theme = readFileSync(path.join(__dirname, "preview.mjs"), "utf8").match(/c
     ),
   };
   aiTour.quiz = flatStops(aiTour).filter((x) => x.check).map((x) => ({ q: x.check!.question, a: x.check!.answer }));
+  const starts = traceStarts(index, "someone adds a todo", texts);
+  const tr = buildTrace(index, texts, starts[0], "someone adds a todo");
+  const traceMsg = { ...repoMsg, goal: "trace", question: "someone adds a todo", suggestions: traceStarts(index, "", texts).map((x) => x.label), tour: tourView(traceTour("someone adds a todo", tr.steps, tr.sequence, "new")), resumeAt: undefined };
+  const deployMsg = { type: "deploy", report: deployReport(index, texts).report, level: "new", ai: { kind: "anthropic", label: "Claude (claude-opus-5-5)", ready: true, state: "idle" } };
   const aiRepoMsg = { ...repoMsg, tour: tourView(aiTour), ai: { ...ai, written: true }, resumeAt: undefined };
   writeFileSync(
   path.join(__dirname, "board-preview.html"),
-  `<!DOCTYPE html><html><head><meta charset="utf-8"><link rel="stylesheet" href="../media/codicons/codicon.css"><link rel="stylesheet" href="../media/board.css"><style>${theme} body{background:#1f1f1f}</style>${mock.replace("__REPO__", JSON.stringify(repoMsg).replace(/</g, "\\u003c")).replace("__AIREPO__", JSON.stringify(aiRepoMsg).replace(/</g, "\\u003c"))}</head><body data-sprites="../media/panda">${html}</body></html>`,
+  `<!DOCTYPE html><html><head><meta charset="utf-8"><link rel="stylesheet" href="../media/codicons/codicon.css"><link rel="stylesheet" href="../media/board.css"><style>${theme} body{background:#1f1f1f}</style>${mock.replace("__REPO__", JSON.stringify(repoMsg).replace(/</g, "\\u003c")).replace("__AIREPO__", JSON.stringify(aiRepoMsg).replace(/</g, "\\u003c")).replace("__TRACE__", JSON.stringify(traceMsg).replace(/</g, "\\u003c")).replace("__DEPLOY__", JSON.stringify(deployMsg).replace(/</g, "\\u003c"))}</head><body data-sprites="../media/panda">${html}</body></html>`,
 );
   console.log("Wrote dev/board-preview.html");
 })();

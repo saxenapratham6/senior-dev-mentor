@@ -19,7 +19,7 @@
 
   function show(view) {
     const changed = $(view).hidden;
-    for (const v of ["sceneView", "examplesView", "loadingView", "summaryView", "roadmapView", "lessonView", "repoView"]) $(v).hidden = v !== view;
+    for (const v of ["sceneView", "examplesView", "loadingView", "summaryView", "roadmapView", "lessonView", "repoView", "deployView"]) $(v).hidden = v !== view;
     if (changed) window.scrollTo(0, 0);
     if (view !== "sceneView") $("counter").textContent = "";
   }
@@ -528,10 +528,55 @@
     return `<li><button class="file-row" data-explain="${esc(f.path)}" title="Have the panda explain ${esc(f.path)}"><code>${esc(f.path)}</code>${f.role ? `<span class="muted"> ${rich(f.role)}</span>` : ""}</button>${reasons}</li>`;
   }
 
+  /** The panel under the goal tabs: a question to trace, or a change to plan. */
+  function goalPanel(m) {
+    const goal = m.goal || "tour";
+    document.querySelectorAll("[data-goal]").forEach((b) => b.classList.toggle("on", b.dataset.goal === goal));
+    const ai = m.ai;
+    const aiReady = ai && ai.state !== "working";
+    const status =
+      ai && ai.state === "working"
+        ? `<p class="ai-progress"><i class="codicon codicon-loading codicon-modifier-spin"></i> <span id="aiProgressText">${esc(ai.text || "Working…")}</span> <button type="button" class="secondary small" id="aiCancel">Cancel</button></p>`
+        : ai && ai.state === "error"
+          ? `<p class="ai-error"><i class="codicon codicon-warning"></i> ${rich(ai.text || "")}${ai.action ? ` <button type="button" class="small" id="aiFix">${ai.action === "setApiKey" ? "Add API key" : "Open settings"}</button>` : ""}</p>`
+          : "";
+    const aiBtn = ai ? `<button type="button" class="secondary" data-with-ai ${aiReady ? "" : "disabled"} title="${esc(ai.kind === "ollama" ? "Uses your local model; nothing leaves this computer" : `Sends the related code to ${ai.label}; secrets are never sent`)}">${icon2("sparkle")}With AI</button>` : "";
+    if (goal === "trace")
+      return `<form class="goal-form" id="traceForm"><label for="traceQ"><b>What happens when…</b></label><div class="row"><input id="traceQ" value="${esc(m.question || "")}" placeholder="a user adds a todo, I run npm start, someone logs in" autocomplete="off"><button type="submit">${icon2("debug-step-into")}Follow it</button>${aiBtn}</div>${
+        m.suggestions?.length ? `<p class="chips"><span class="muted small">Or start from:</span> ${m.suggestions.map((s, i) => `<button type="button" class="chip" data-start="${i}">${esc(s)}</button>`).join("")}</p>` : ""
+      }${status}</form>`;
+    if (goal === "change")
+      return `<form class="goal-form" id="changeForm"><label for="changeQ"><b>What do you need to change?</b> <span class="muted small">I'll show you where it goes, what else it touches, and which tests to run. You write the change.</span></label><div class="row"><input id="changeQ" value="${esc(m.task || "")}" placeholder="add a due date to todos" autocomplete="off"><button type="submit">${icon2("search")}Find the code</button>${aiBtn}</div>${status}</form>`;
+    return "";
+  }
+
+  /** Lifelines across the top, one arrow per hand-over, in order. Click an arrow to walk there. */
+  function seqSvg(seq) {
+    if (!seq || seq.actors.length < 2) return "";
+    const n = seq.actors.length;
+    const col = Math.max(120, Math.min(170, 720 / n));
+    const W = 20 + n * col, rowH = 34, top = 44;
+    const H = top + seq.messages.length * rowH + 20;
+    const x = (a) => 10 + seq.actors.indexOf(a) * col + col / 2;
+    const heads = seq.actors.map((a) => `<g class="seq-actor"><rect x="${x(a) - col / 2 + 8}" y="6" width="${col - 16}" height="26" rx="6"/><text x="${x(a)}" y="23">${esc(a)}</text></g><line class="seq-life" x1="${x(a)}" y1="32" x2="${x(a)}" y2="${H - 6}"/>`).join("");
+    const msgs = seq.messages
+      .map((msg, i) => {
+        const y = top + i * rowH + 16;
+        const x1 = x(msg.from), x2 = x(msg.to);
+        const self = msg.from === msg.to;
+        const path = self ? `M${x1},${y - 8} h24 v16 h-22` : `M${x1},${y} L${x2 + (x2 > x1 ? -4 : 4)},${y}`;
+        const lx = self ? x1 + 30 : (x1 + x2) / 2;
+        return `<g class="seq-msg" data-stop="${msg.stop}" tabindex="0"><title>Walk to step ${msg.stop + 1}</title><rect class="seq-hit" x="${Math.min(x1, x2) - 6}" y="${y - 16}" width="${Math.abs(x2 - x1) + (self ? 60 : 12)}" height="24"/><path d="${path}" marker-end="url(#seqHead)"/><text x="${lx}" y="${y - 5}" text-anchor="${self ? "start" : "middle"}"><tspan class="seq-n">${i + 1}</tspan> ${esc(msg.label)}</text></g>`;
+      })
+      .join("");
+    return `<section class="card"><h2><i class="codicon codicon-arrow-swap"></i>Who talks to whom</h2><div class="arch-wrap"><svg class="seq" viewBox="0 0 ${W} ${H}" role="img" aria-label="Sequence of the steps"><defs><marker id="seqHead" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" class="arrow-head"/></marker></defs>${heads}${msgs}</svg></div><p class="muted small">Click an arrow to walk to that step.</p></section>`;
+  }
+
   function renderRepo(m) {
     repoMsg = m;
     const { repo, tour } = m;
     const isRepo = tour.kind === "repo";
+    $("goalPanel").innerHTML = goalPanel(m);
     $("title").textContent = isRepo ? `Tour of ${repo.name}` : tour.title;
     $("repoHeadline").innerHTML = isRepo
       ? `This is <b>${esc(repo.name)}</b>${repo.description ? `: ${rich(repo.description)}` : "."}`
@@ -589,9 +634,16 @@
           .map((q) => `<li><details><summary>${rich(q.q)}</summary><p>${rich(q.a)}</p></details></li>`)
           .join("")}</ul></details>`
       : "";
-    $("repoBody").innerHTML =
+    const quizCard = tour.quiz.length && !isRepo ? `<section class="card"><h2><i class="codicon codicon-question"></i>Before you start</h2><ul class="quiz-list">${tour.quiz.map((q) => `<li><details><summary>${rich(q.q)}</summary><p>${rich(q.a)}</p></details></li>`).join("")}</ul></section>` : "";
+    const aiNote = !isRepo && tour.ai ? `<p class="muted small"><i class="codicon codicon-sparkle"></i> Written by ${esc(tour.ai.label)}, checked against your code${tour.ai.checked.dropped ? ` (${plural(tour.ai.checked.dropped, "step", "steps")} thrown away: the code they quoted isn't there)` : ""}.</p>` : "";
+    const goalNow = m.goal || "tour";
+    const hideBody = (goalNow === "trace" && tour.kind !== "trace") || (goalNow === "change" && tour.kind !== "change");
+    $("repoBody").innerHTML = hideBody ? "" :
       (isRepo ? aiCard(m.ai, tour) + overviewCards(tour.ai) : "") +
+      (tour.kind === "trace" ? seqSvg(tour.sequence) : "") +
+      aiNote +
       (tour.message && !isRepo ? "" : outline) +
+      quizCard +
       (isRepo ? card("Start here", "debug-start", repo.start, true) + card("The files that do the work", "flame", repo.core, true) + folders + supporting + skip + quiz : "");
     show("repoView");
     tourAt(m.at);
@@ -628,6 +680,75 @@
     });
   }
 
+  // ------------------------------------------------------------ deploy
+
+  let deployMsg = null;
+  const STATUS_ICON = { pass: "pass-filled", warn: "warning", fail: "error" };
+
+  function renderDeploy(m) {
+    deployMsg = m;
+    const r = m.report;
+    $("title").textContent = "How to deploy this";
+    $("deployHeadline").innerHTML = `This is ${rich(r.app.words)}.${r.app.evidence.length ? ` <span class="muted">(It ${rich(r.app.evidence.join("; "))}.)</span>` : ""}`;
+    $("deployMeta").innerHTML = [r.score.fail && `<b class="st-fail">${r.score.fail} to fix first</b>`, r.score.warn && `<b class="st-warn">${r.score.warn} to look at</b>`, `<b class="st-pass">${r.score.pass} ready</b>`, r.app.db && `database: ${rich(r.app.db)}`].filter(Boolean).join(" · ");
+    $("deployPanda").src = `${sprites}/${r.score.fail ? "think" : "cheer"}.svg`;
+    const x = r.explained;
+    const chosen = r.targets.find((t) => t.id === r.chosen);
+    const order = { fail: 0, warn: 1, pass: 2 };
+    const checks = [...r.checks].sort((a, b) => order[a.status] - order[b.status]);
+    const plain = (title) => x?.fixFirst.find((f) => f.check === title)?.explain;
+    const ai = m.ai;
+    const aiBlock = ai
+      ? x
+        ? ""
+        : `<section class="card ai-card"><p>${icon2("sparkle")} Want it explained for this app, step by step${m.level === "new" ? " in plain words" : ""}? ${esc(ai.label)} reads the checks and your deploy files (package.json, Dockerfile, Procfile…), with secrets blanked out. It can't change a check, and only commands for ${esc(chosen?.name ?? "the host")} get through.</p>${
+            ai.state === "working"
+              ? `<p class="ai-progress"><i class="codicon codicon-loading codicon-modifier-spin"></i> ${esc(ai.text || "Working…")}</p>`
+              : `${ai.state === "error" ? `<p class="ai-error">${rich(ai.text || "")}${ai.action ? ` <button class="small" id="deployFix">${ai.action === "setApiKey" ? "Add API key" : "Open settings"}</button>` : ""}</p>` : ""}<button id="deployExplain">${icon2("sparkle")}Explain it for me</button>`
+          }</section>`
+      : "";
+    $("deployBody").innerHTML =
+      (x ? `<section class="card ai-card done"><h2>${icon2("sparkle")}Deploying this app</h2>${md(x.intro)}</section>` : "") +
+      `<section class="card"><h2>${icon2("checklist")}Before you deploy</h2><ul class="checks">${checks
+        .map(
+          (c) =>
+            `<li class="check c-${c.status}"><i class="codicon codicon-${STATUS_ICON[c.status]}"></i><div><b>${rich(c.title)}</b>${c.where ? ` <button class="link small" data-open="${esc(c.where.path)}" data-line="${c.where.line}">${icon2("go-to-file")}Show me (${esc(c.where.path)}:${c.where.line + 1})</button>` : ""}<p class="muted">${rich(c.why)}</p>${c.fix ? `<p><b>What to change:</b> ${rich(c.fix)}</p>` : ""}${plain(c.title) ? `<p class="plain">${icon2("sparkle")} ${rich(plain(c.title))}</p>` : ""}</div></li>`,
+        )
+        .join("")}</ul></section>` +
+      aiBlock +
+      `<section class="card"><h2>${icon2("cloud-upload")}Where it can go</h2><div class="targets">${r.targets
+        .map(
+          (t) =>
+            `<button class="target${t.id === r.chosen ? " on" : ""}" data-target="${t.id}" aria-pressed="${t.id === r.chosen}"><b>${esc(t.name)}</b>${t.reasons.length ? `<span class="small">${rich(t.reasons.join("; "))}</span>` : ""}<span class="muted small">${rich(t.cost)}</span></button>`,
+        )
+        .join("")}</div>${chosen ? `<p>${rich(chosen.good)}</p><p class="muted"><b>Watch out:</b> ${rich(chosen.watch)}</p><p class="small"><a href="#" data-url="${esc(chosen.docs)}">${esc(chosen.name)} docs</a> · <a href="#" data-url="${esc(chosen.pricing)}">pricing</a></p>` : ""}</section>` +
+      (chosen
+        ? `<section class="card"><h2>${icon2("list-ordered")}Steps on ${esc(chosen.name)}${x ? " (your guide)" : ""}</h2><ol class="steps">${(x && x.steps.length ? x.steps : r.steps)
+            .map((s) => `<li><b>${rich(s.title)}</b><p class="muted">${rich(s.why)}</p>${s.command ? `<pre class="cmd"><code>${esc(s.command)}</code></pre>` : ""}${s.link ? `<a href="#" class="small" data-url="${esc(s.link)}">Read more</a>` : ""}</li>`)
+            .join("")}</ol><p class="muted small">You type each command yourself; the mentor never runs a deploy for you.</p></section>`
+        : `<section class="card"><p>I don't know a good host for this kind of project yet.</p></section>`) +
+      ((x?.risks.length ? x.risks : r.failures).length
+        ? `<details class="card fold"><summary>${icon2("bug")}What could go wrong</summary><ul class="skip">${(x?.risks.length ? x.risks : r.failures).map((f) => `<li><b>${rich(f.symptom)}</b><p class="muted">${rich(f.meaning)} ${rich(f.check)}</p></li>`).join("")}</ul></details>`
+        : "") +
+      `<p class="muted small">Hosting plans change often. This list was last checked ${esc(r.catalogChecked)}; always check the host's own pricing page.</p>`;
+    show("deployView");
+  }
+
+  $("deployBack").addEventListener("click", () => vscode.postMessage({ type: "repoMap" }));
+  $("deployBody").addEventListener("click", (e) => {
+    const open = e.target.closest("[data-open]");
+    if (open) return vscode.postMessage({ type: "openFile", path: open.dataset.open, line: Number(open.dataset.line) });
+    const t = e.target.closest("[data-target]");
+    if (t) return vscode.postMessage({ type: "deployTarget", id: t.dataset.target });
+    const link = e.target.closest("[data-url]");
+    if (link) {
+      e.preventDefault();
+      return vscode.postMessage({ type: "openUrl", url: link.dataset.url });
+    }
+    if (e.target.closest("#deployExplain")) return vscode.postMessage({ type: "deployExplain" });
+    if (e.target.closest("#deployFix")) return vscode.postMessage({ type: "fix", action: deployMsg?.ai?.action });
+  });
+
   $("tourStart").addEventListener("click", () => vscode.postMessage({ type: "tourStart" }));
   $("tourResume").addEventListener("click", () => vscode.postMessage({ type: "tourResume" }));
   $("tourNext").addEventListener("click", () => vscode.postMessage({ type: "tourNext" }));
@@ -635,6 +756,23 @@
   $("tourEnd").addEventListener("click", () => vscode.postMessage({ type: "tourEnd" }));
   $("repoMapBack").addEventListener("click", () => vscode.postMessage({ type: "repoMap" }));
   document.querySelectorAll("[data-level]").forEach((b) => b.addEventListener("click", () => vscode.postMessage({ type: "tourLevel", level: b.dataset.level })));
+  document.querySelectorAll("[data-goal]").forEach((b) => b.addEventListener("click", () => vscode.postMessage({ type: "goal", goal: b.dataset.goal })));
+  $("goalPanel").addEventListener("submit", (e) => {
+    e.preventDefault();
+    if (e.target.id === "traceForm") vscode.postMessage({ type: "traceRun", question: $("traceQ").value, ai: false });
+    if (e.target.id === "changeForm" && $("changeQ").value.trim()) vscode.postMessage({ type: "changeRun", task: $("changeQ").value, ai: false });
+  });
+  $("goalPanel").addEventListener("click", (e) => {
+    if (e.target.closest("#aiCancel")) return vscode.postMessage({ type: "aiCancel" });
+    if (e.target.closest("#aiFix")) return vscode.postMessage({ type: "fix", action: repoMsg?.ai?.action });
+    const start = e.target.closest("[data-start]");
+    if (start) return vscode.postMessage({ type: "traceRun", question: "", start: Number(start.dataset.start), ai: false });
+    if (e.target.closest("[data-with-ai]")) {
+      if ($("traceQ")) return vscode.postMessage({ type: "traceRun", question: $("traceQ").value, ai: true });
+      if ($("changeQ") && $("changeQ").value.trim()) return vscode.postMessage({ type: "changeRun", task: $("changeQ").value, ai: true });
+    }
+  });
+
   $("repoBody").addEventListener("click", (e) => {
     if (e.target.closest("#aiTour")) return vscode.postMessage({ type: "aiTour" });
     if (e.target.closest("#aiCancel")) return vscode.postMessage({ type: "aiCancel" });
@@ -686,6 +824,9 @@
         break;
       case "tourAt":
         tourAt(m.stop);
+        break;
+      case "deploy":
+        renderDeploy(m);
         break;
       case "aiProgress":
         if ($("aiProgressText")) $("aiProgressText").textContent = m.text;

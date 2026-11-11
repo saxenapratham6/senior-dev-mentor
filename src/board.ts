@@ -31,7 +31,20 @@ export type BoardMessage =
   | { type: "runResult"; exampleId: string; result: RunResult & { saved?: boolean } }
   | { type: "checkResult"; exerciseId: string; result: CheckResult }
   | { type: "lessonState"; done: boolean; passed: string[]; ladder: string[] }
-  | { type: "repo"; repo: RepoView; tour: TourView; level: "new" | "experienced"; at: number; resumeAt?: number; ai?: AiPanel }
+  | {
+      type: "repo";
+      repo: RepoView;
+      tour: TourView;
+      level: "new" | "experienced";
+      at: number;
+      resumeAt?: number;
+      ai?: AiPanel;
+      goal?: "tour" | "trace" | "change" | "deploy";
+      suggestions?: string[];
+      question?: string;
+      task?: string;
+    }
+  | { type: "deploy"; report: import("./deploy/report").DeployReport; level: "new" | "experienced"; ai?: { kind: string; label: string; ready: boolean; state: string; text?: string; action?: string } }
   | { type: "tourAt"; stop: number }
   | { type: "aiProgress"; text: string };
 
@@ -79,8 +92,9 @@ export interface RepoView {
 
 export interface TourView {
   title: string;
-  kind: "repo" | "folder" | "file";
+  kind: "repo" | "folder" | "file" | "trace" | "change";
   message?: string;
+  sequence?: { question: string; actors: string[]; messages: { from: string; to: string; label: string; stop: number }[] };
   chapters: {
     title: string;
     why: string;
@@ -115,9 +129,14 @@ export type RepoAction =
   | { type: "repoMap" }
   | { type: "aiTour" }
   | { type: "aiCancel" }
-  | { type: "aiBasic" };
+  | { type: "aiBasic" }
+  | { type: "goal"; goal: "tour" | "trace" | "change" | "deploy" }
+  | { type: "traceRun"; question: string; start?: number; ai: boolean }
+  | { type: "changeRun"; task: string; ai: boolean }
+  | { type: "deployTarget"; id: string }
+  | { type: "deployExplain" };
 
-const REPO_ACTIONS = new Set(["tourStart", "tourResume", "tourJump", "tourNext", "tourBack", "tourEnd", "tourLevel", "explainPath", "openFile", "repoMap", "aiTour", "aiCancel", "aiBasic"]);
+const REPO_ACTIONS = new Set(["tourStart", "tourResume", "tourJump", "tourNext", "tourBack", "tourEnd", "tourLevel", "explainPath", "openFile", "repoMap", "aiTour", "aiCancel", "aiBasic", "goal", "traceRun", "changeRun", "deployTarget", "deployExplain"]);
 
 /** Everything the lesson view can ask for. */
 export type LessonAction =
@@ -376,6 +395,13 @@ function boardHtml(webview: vscode.Webview, media: vscode.Uri): string {
       </span>
       <button id="repoMapBack" class="link" hidden>${icon("map")}Whole repo</button>
     </div>
+    <div class="goal-tabs segmented" role="tablist" aria-label="What do you want to do?">
+      <button role="tab" data-goal="tour">${icon("compass")}Show me around</button>
+      <button role="tab" data-goal="trace">${icon("debug-step-into")}Follow what happens</button>
+      <button role="tab" data-goal="change">${icon("edit")}I need to change something</button>
+      <button role="tab" data-goal="deploy">${icon("rocket")}How do I deploy this?</button>
+    </div>
+    <div id="goalPanel"></div>
     <p id="repoChips" class="tags"></p>
     <div id="tourBar" class="tour-bar" hidden>
       <span id="tourWhere"></span>
@@ -387,6 +413,15 @@ function boardHtml(webview: vscode.Webview, media: vscode.Uri): string {
     </div>
     <section id="tourNow" class="card tour-now" hidden aria-live="polite"></section>
     <div id="repoBody" class="repo-body"></div>
+  </section>
+
+  <section id="deployView" class="view" hidden>
+    <nav class="lesson-nav"><button class="link" id="deployBack" title="Back to the repo map">${icon("arrow-left")}Repo map</button></nav>
+    <div class="intro">
+      <img id="deployPanda" class="panda big" alt="" src="${uri("panda/talk.svg")}">
+      <div class="bubble static"><p id="deployHeadline"></p><p id="deployMeta" class="muted small"></p></div>
+    </div>
+    <div id="deployBody" class="repo-body"></div>
   </section>
 
   <section id="summaryView" class="view" hidden>

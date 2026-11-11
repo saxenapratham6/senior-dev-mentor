@@ -42,5 +42,6 @@ export function tourView(tour: Tour): TourView {
     })),
     quiz: tour.quiz,
     ai: tour.ai,
+    sequence: tour.sequence,
   };
 }

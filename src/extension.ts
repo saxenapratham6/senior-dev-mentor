@@ -23,6 +23,7 @@ export function activate(context: vscode.ExtensionContext): { panda: EditorPanda
   guide = new RepoGuide(context, panda, mentor.board);
   mentor.repoActions = (a) => void guide.onAction(a);
   guide.aiSetup = () => mentor.aiSetup();
+  guide.onEvent = (kind, detail) => mentor.logEvent(kind, detail);
   context.subscriptions.push(panda, guide);
 
   context.subscriptions.push(
@@ -40,6 +41,15 @@ export function activate(context: vscode.ExtensionContext): { panda: EditorPanda
     vscode.commands.registerCommand("seniorDevMentor.openLesson", (id?: string) => (id ? mentor.showLesson(id) : mentor.showRoadmap())),
     vscode.commands.registerCommand("seniorDevMentor.tour", () => guide.open()),
     vscode.commands.registerCommand("seniorDevMentor.explain", (uri?: vscode.Uri) => guide.explain(uri)),
+    vscode.commands.registerCommand("seniorDevMentor.deploy", () => guide.showDeploy()),
+    vscode.commands.registerCommand("seniorDevMentor.trace", async (question?: string) => {
+      question ??= await vscode.window.showInputBox({ title: "Follow what happens when…", prompt: "For example: a user logs in, I run npm start, someone adds a todo", ignoreFocusOut: true });
+      if (question !== undefined) await guide.trace(question);
+    }),
+    vscode.commands.registerCommand("seniorDevMentor.change", async (task?: string) => {
+      task ??= await vscode.window.showInputBox({ title: "I need to change something", prompt: "What do you need to change? For example: add a due date to todos", ignoreFocusOut: true });
+      if (task) await guide.change(task);
+    }),
     vscode.commands.registerCommand("seniorDevMentor.pandaNext", () => panda.next()),
     vscode.commands.registerCommand("seniorDevMentor.pandaBack", () => panda.back()),
     vscode.commands.registerCommand("seniorDevMentor.pandaDismiss", () => panda.dismiss()),

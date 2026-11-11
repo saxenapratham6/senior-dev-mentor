@@ -10,7 +10,11 @@ import type { RepoIndex } from "../../repo/types";
 import type { MentorProvider } from "../../providers/types";
 import type { GuardOptions } from "../../guardrails";
 import { buildRepoTour, flatStops, Level, Tour } from "../tour";
-import { AiTourSchema, AiTour, FileSummariesSchema, FileSummaries, FileSummary, OverviewSchema, Overview } from "./schema";
+import { AiTourSchema, AiTour, AiTraceSchema, AiTrace, FileSummariesSchema, FileSummaries, FileSummary, OverviewSchema, Overview } from "./schema";
+import { findAnchor, clip } from "./normalize";
+import { guardExplanation } from "../../guardrails";
+import { traceTour, TraceStart, TraceStep, Sequence } from "../trace";
+import { basename } from "../../repo/files";
 import { Budget, estimateTokens, fileExcerpt, indexDigest, planSend } from "./digest";
 import { normalizeAiTour, normalizeOverview, normalizeSummaries } from "./normalize";
 
@@ -47,6 +51,28 @@ Below is an index of the repository. You'll get summaries of its most important 
 - howItWorks: the path one typical request, command or event takes through the code, naming the files in order. Four to six sentences.
 - architecture: 3 to 7 boxes for the main parts (each with a short id, a label of at most 4 words, one sentence on what it does, and the repo paths of the files that make it up), and arrows between them labeled with what flows (for example "HTTP request", "SQL query", "calls"). Include outside things the code talks to, like "Browser" or "PostgreSQL", as boxes with no files.
 - glossary: up to 8 terms a newcomer will meet in this repo (only terms that really appear), each with a one-sentence meaning.
+
+${digest}`;
+}
+
+export function changePrompt(digest: string, level: Level, task: string): string {
+  return `${ROLE}
+
+The reader wants to make this change: "${task}"
+
+Write a short tour of ONLY the code this change touches, in the order they should read it: where to start, what else is affected (callers, data shapes, templates, tests), and how they will check it works. ${level === "new" ? "They are new to this: plain words, explain terms." : "They are experienced: be brief and precise."} 3 to 7 stops, one chapter titled "Where your change goes".
+
+Never write the change, a fix, or any new code. Point, explain what the code does today, and ask what they plan to do. Each stop has the same fields as a tour stop: path, 1-based line as numbered, an exact anchor from that line, bubble, explain, simpler, deeper, checkQuestion and checkAnswer. A good checkQuestion here asks what they will change at this spot, or what could break.
+
+${digest}`;
+}
+
+export function tracePrompt(digest: string, level: Level): string {
+  return `${ROLE}
+
+The reader asked what happens in the code when something happens. Follow it step by step, in the order the code runs, from where it starts (a route, a command, an event) through each function in another file it calls, to where it ends (a response, a database, a file). ${level === "new" ? "They are new to this: plain words, one or two sentences per step." : "They are experienced: precise and brief."}
+
+For each step: path, the 1-based line as numbered in the excerpts, an anchor (a short piece of that exact line, 10 to 60 characters), actor (a 1-3 word name for who acts here, the same name each time the same file acts), calledBy (the actor that hands over to this step, or the "outside" starter for the first step), handsOver (what is passed, 1-4 words), bubble (at most 15 words) and explain. 3 to 9 steps. Only include steps you can see in the excerpts. Never write new code.
 
 ${digest}`;
 }
@@ -125,7 +151,15 @@ export class SummaryCache {
 
 // ------------------------------------------------------------------ the writer
 
+export interface Goal {
+  kind: "change";
+  task: string;
+  /** Files the no-AI search found, sent first. */
+  candidates: string[];
+}
+
 export interface WriteOptions {
+  goal?: Goal;
   index: RepoIndex;
   texts: Map<string, string | undefined>;
   provider: MentorProvider;
@@ -150,7 +184,7 @@ export interface WriteResult {
 
 export async function writeAiTour(o: WriteOptions): Promise<WriteResult> {
   const { index, texts, provider, signal } = o;
-  const plan = planSend(index, texts, o.budget, o.never);
+  const plan = planSend(index, texts, o.budget, o.never, o.goal?.candidates);
   if (!plan.files.length) throw new Error("There's no code here I can read, so there's nothing to tour.");
   const digest = indexDigest(index, index.readme ? texts.get(index.readme) : undefined);
   const info = new Map(index.files.map((f) => [f.path, f]));
@@ -207,21 +241,114 @@ export async function writeAiTour(o: WriteOptions): Promise<WriteResult> {
 
   // 3. The tour: the summaries, the no-AI tour as a starting point, and the code of the files that matter most.
   o.onProgress?.("Planning the tour…");
-  const skeleton = flatStops(buildRepoTour(index, o.level)).map((s) => `- ${s.path}:${s.line + 1} (${s.title})`).join("\n");
-  const important = plan.files.filter((p) => ["start", "core"].includes(info.get(p)!.bucket));
+  const skeleton = o.goal
+    ? o.goal.candidates.map((p) => `- ${p}`).join("\n")
+    : flatStops(buildRepoTour(index, o.level)).map((s) => `- ${s.path}:${s.line + 1} (${s.title})`).join("\n");
+  const important = o.goal ? plan.files.filter((p) => o.goal!.candidates.includes(p)).slice(0, 6) : plan.files.filter((p) => ["start", "core"].includes(info.get(p)!.bucket));
   const user = [
     `Overview you wrote:\n${overview.purpose}\n${overview.howItWorks}`,
     `File summaries:\n\n${summaryText}`,
-    `A tour worked out without AI, as a starting point (improve on it):\n${skeleton}`,
+    o.goal ? `Files a keyword search found for this change (it may have missed some, or included some that don't matter):\n${skeleton}` : `A tour worked out without AI, as a starting point (improve on it):\n${skeleton}`,
     `Code of the most important files, numbered:\n\n${important.map(excerpt).join("\n\n")}`,
   ].join("\n\n---\n\n");
   calls++;
-  const rawTour = (await provider.json(tourPrompt(digest, o.level), user, AiTourSchema, signal, { effort: "medium", cacheSystem: true, what: "tour" })) as AiTour;
+  const prompt = o.goal ? changePrompt(digest, o.level, o.goal.task) : tourPrompt(digest, o.level);
+  const rawTour = (await provider.json(prompt, user, AiTourSchema, signal, { effort: "medium", cacheSystem: true, what: "tour" })) as AiTour;
   const { tour, report } = normalizeAiTour(rawTour, index, texts, o.level, o.guard);
+  if (o.goal) {
+    tour.kind = "change";
+    tour.title = `Changing: ${o.goal.task.trim().replace(/\.$/, "")}`;
+  }
   if (flatStops(tour).length < 2) throw new Error("The AI's tour pointed at code that isn't in your files, so I threw it away. Try again, or use the tour I worked out myself.");
   tour.ai = { label: provider.label, overview, files: plan.files.length, checked: { kept: report.kept, moved: report.moved, dropped: report.dropped.length } };
   tour.quiz = flatStops(tour).filter((s) => s.check).slice(0, 6).map((s) => ({ q: s.check!.question, a: s.check!.answer }));
   return { tour, summaries: ordered, overview, sentFiles: plan.files, calls, cachedFiles };
+}
+
+// ------------------------------------------------------------------ a trace, with AI
+
+export interface TraceOptions {
+  index: RepoIndex;
+  texts: Map<string, string | undefined>;
+  provider: MentorProvider;
+  level: Level;
+  question: string;
+  start?: TraceStart;
+  /** The no-AI trace, sent as a starting point. */
+  steps: TraceStep[];
+  never?: (path: string) => boolean;
+  guard?: GuardOptions;
+  signal: AbortSignal;
+}
+
+/** One call: the question, the no-AI trace and the code of the files along it. */
+export async function writeAiTrace(o: TraceOptions): Promise<Tour> {
+  const { index, texts } = o;
+  const info = new Map(index.files.map((f) => [f.path, f]));
+  const along = [...new Set(o.steps.map((s) => s.path))];
+  // The files on the path, then what they import, while it fits.
+  const near = [...along, ...along.flatMap((p) => info.get(p)?.imports ?? [])].filter((p, i, all) => all.indexOf(p) === i && !o.never?.(p) && texts.get(p) !== undefined && info.get(p)?.kind === "source");
+  let size = 0;
+  const sent: string[] = [];
+  for (const p of near) {
+    const t = estimateTokens(fileExcerpt(info.get(p)!, texts.get(p)!));
+    if (sent.length && size + t > 30_000) continue;
+    sent.push(p);
+    size += t;
+  }
+  if (!sent.length) {
+    // Nothing found without AI: send the entry points and core files instead.
+    for (const f of index.files.filter((x) => (x.bucket === "start" || x.bucket === "core") && x.read && !o.never?.(x.path)).slice(0, 8)) sent.push(f.path);
+  }
+  const user = [
+    `Question: what happens when ${o.question}?`,
+    o.start ? `It probably starts at ${o.start.label} (${o.start.path}, line ${o.start.line + 1}).` : "",
+    o.steps.length ? `A trace worked out without AI (follows imports, may be incomplete):\n${o.steps.map((s) => `- ${s.path}:${s.line + 1} ${s.actor}`).join("\n")}` : "",
+    `Code, numbered:\n\n${sent.map((p) => fileExcerpt(info.get(p)!, texts.get(p)!)).join("\n\n")}`,
+  ]
+    .filter(Boolean)
+    .join("\n\n---\n\n");
+  const digest = indexDigest(index, index.readme ? texts.get(index.readme) : undefined);
+  const raw = (await o.provider.json(tracePrompt(digest, o.level), user, AiTraceSchema, o.signal, { effort: "medium", cacheSystem: true, what: "trace" })) as AiTrace;
+  const corpus = [...texts.values()].filter((t): t is string => t !== undefined);
+  const text = (s: string, max: number) => clip(guardExplanation(s ?? "", corpus, o.guard).text.trim(), max);
+  const steps: TraceStep[] = [];
+  const outside = clip(raw.outside || "Outside", 24);
+  const messages: Sequence["messages"] = [];
+  const actors = [outside];
+  let dropped = 0;
+  for (const s of (raw.steps ?? []).slice(0, 12)) {
+    const path = String(s.path ?? "").replace(/^\.?\//, "");
+    const body = texts.get(path);
+    const f = info.get(path);
+    if (!f || body === undefined || f.kind === "secret") {
+      dropped++;
+      continue;
+    }
+    const lines = body.split("\n");
+    const at = findAnchor(lines, s.anchor ?? "", Math.max(0, (s.line ?? 1) - 1));
+    if (at === undefined) {
+      dropped++;
+      continue;
+    }
+    const actor = clip(s.actor || basename(path), 24);
+    const from = actors.includes(clip(s.calledBy ?? "", 24)) ? clip(s.calledBy, 24) : (steps.length ? steps[steps.length - 1].actor : outside);
+    if (!actors.includes(actor)) actors.push(actor);
+    messages.push({ from, to: actor, label: clip(s.handsOver || basename(path), 30), stop: steps.length });
+    steps.push({ path, line: at, actor, what: text(s.explain, 700), bubble: text(s.bubble, 110).replace(/\n+/g, " ") });
+  }
+  if (steps.length < 2) throw new Error("The AI's trace pointed at code that isn't in your files, so I threw it away. The trace I worked out myself is still on the board.");
+  const end = clip(raw.endsAt ?? "", 24);
+  if (end && !actors.includes(end)) {
+    actors.push(end);
+    messages.push({ from: steps[steps.length - 1].actor, to: end, label: "", stop: steps.length - 1 });
+  }
+  return traceTour(o.question, steps, { question: o.question, actors, messages }, o.level, {
+    label: o.provider.label,
+    files: sent.length,
+    checked: { kept: steps.length, moved: 0, dropped },
+    overview: { purpose: "", users: "", howItWorks: "", architecture: { boxes: [], arrows: [] }, glossary: [] },
+  });
 }
 
 async function inParallel<T>(items: T[], width: number, fn: (x: T) => Promise<void>): Promise<void> {

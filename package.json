@@ -2,7 +2,7 @@
   "name": "senior-dev-mentor",
   "displayName": "Senior Dev Mentor",
   "description": "An open-source AI mentor that teaches you to code instead of coding for you. A panda lives in your editor, walks you through any repo file by file, points at the lines worth a look, draws data structures on its board, and wraps up what you learned.",
-  "version": "0.9.0",
+  "version": "1.1.0",
   "publisher": "senior-dev-mentor",
   "license": "MIT",
   "repository": {
@@ -90,6 +90,21 @@
       {
         "command": "seniorDevMentor.explain",
         "title": "Explain with the Mentor",
+        "category": "Mentor"
+      },
+      {
+        "command": "seniorDevMentor.trace",
+        "title": "Follow What Happens When…",
+        "category": "Mentor"
+      },
+      {
+        "command": "seniorDevMentor.change",
+        "title": "I Need to Change Something: Where Do I Start?",
+        "category": "Mentor"
+      },
+      {
+        "command": "seniorDevMentor.deploy",
+        "title": "How Do I Deploy This?",
         "category": "Mentor"
       },
       {

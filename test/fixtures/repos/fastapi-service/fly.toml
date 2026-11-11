@@ -1,0 +1,8 @@
+app = "items-api"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+
+[checks.health]
+  path = "/health"

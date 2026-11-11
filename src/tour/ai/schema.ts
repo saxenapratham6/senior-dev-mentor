@@ -51,3 +51,21 @@ export const AiTourSchema = z.object({
   ),
 });
 export type AiTour = z.infer<typeof AiTourSchema>;
+
+export const AiTraceSchema = z.object({
+  outside: z.string(), // who starts it: "Browser", "Terminal", "Scheduler"…
+  steps: z.array(
+    z.object({
+      path: z.string(),
+      line: z.number().int(),
+      anchor: z.string(),
+      actor: z.string(), // a short name for who acts here: "Routes", "Auth service"
+      calledBy: z.string(), // the actor (or the outside starter) that hands over to this step
+      handsOver: z.string(), // what is passed along, 1-4 words: "the form data", "a SQL query"
+      bubble: z.string(),
+      explain: z.string(),
+    }),
+  ),
+  endsAt: z.string(), // an outside system the last step talks to ("PostgreSQL", "the browser"), or ""
+});
+export type AiTrace = z.infer<typeof AiTraceSchema>;

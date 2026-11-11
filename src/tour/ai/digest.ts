@@ -112,13 +112,17 @@ export interface SendPlan {
  * the index digest is sent with every call, excerpts once for summaries and
  * the most important again for the tour itself.
  */
-export function planSend(index: RepoIndex, texts: Map<string, string | undefined>, budget: Budget, never: (path: string) => boolean = () => false): SendPlan {
+export function planSend(index: RepoIndex, texts: Map<string, string | undefined>, budget: Budget, never: (path: string) => boolean = () => false, first: string[] = []): SendPlan {
   const limit = BUDGETS[budget];
   const digest = estimateTokens(indexDigest(index, index.readme ? texts.get(index.readme) : undefined));
   const order = ["start", "core", "supporting"] as const;
-  const candidates = order.flatMap((b) =>
-    index.files.filter((f) => f.bucket === b && f.kind === "source" && f.read && texts.get(f.path) !== undefined && !never(f.path)).sort((a, c) => c.score - a.score),
-  );
+  const ok = (f: RepoIndex["files"][number]) => f.kind === "source" && f.read && texts.get(f.path) !== undefined && !never(f.path);
+  // Files that matter for this particular question come first, then the usual order.
+  const firstFiles = first.map((p) => index.files.find((f) => f.path === p)).filter((f): f is RepoIndex["files"][number] => !!f && ok(f));
+  const candidates = [
+    ...firstFiles,
+    ...order.flatMap((b) => index.files.filter((f) => f.bucket === b && ok(f) && !first.includes(f.path)).sort((a, c) => c.score - a.score)),
+  ];
   // Calls: summaries (about one per 12k tokens of excerpts), the overview, the tour. Each repeats the digest.
   let used = digest * 3 + 1500;
   const files: string[] = [];

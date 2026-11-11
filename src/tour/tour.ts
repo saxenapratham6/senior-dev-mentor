@@ -32,13 +32,15 @@ export interface QuizQuestion {
 }
 
 export interface Tour {
-  kind: "repo" | "folder" | "file";
+  kind: "repo" | "folder" | "file" | "trace" | "change";
   level: Level;
   title: string;
   /** Said by the panda when there's nothing to walk to (for example, a file it won't open). */
   message?: string;
   chapters: Chapter[];
   quiz: QuizQuestion[];
+  /** Traces: who talks to whom, for the sequence diagram. */
+  sequence?: import("./trace").Sequence;
   /** Set when an AI model wrote the tour. */
   ai?: { label: string; overview: import("./ai/schema").Overview; files: number; checked: { kept: number; moved: number; dropped: number } };
 }

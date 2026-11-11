@@ -13,6 +13,7 @@ import { EditorPanda, PandaWhereabouts } from "./editorPanda";
 import { PandaBoard } from "./board";
 import { PROBLEM_MILESTONES, RoadmapState, emptyRoadmapState, toggleItem, addSolved, toggleLadder, markPassed, roadmapProgress, isRoadmapLink, leetcodeUrl } from "./roadmap";
 import { Classroom } from "./classroom";
+import { isDeployLink } from "./deploy/targets";
 import type { LessonAction, RepoAction } from "./board";
 import { UNITS } from "./lessons/types";
 import {
@@ -110,7 +111,8 @@ export class MentorViewProvider implements vscode.WebviewViewProvider {
       onLesson: (action) => void this.onLesson(action),
       onRepo: (action) => this.repoActions?.(action),
       onOpenUrl: (url) => {
-        if (isRoadmapLink(url)) void vscode.env.openExternal(vscode.Uri.parse(url));
+        // Only links the extension itself put on the board: roadmap courses, hosting docs.
+        if (isRoadmapLink(url) || isDeployLink(url)) void vscode.env.openExternal(vscode.Uri.parse(url));
       },
     });
     ctx.subscriptions.push(
@@ -171,6 +173,11 @@ export class MentorViewProvider implements vscode.WebviewViewProvider {
   private post(msg: unknown): void {
     if (this.view) void this.view.webview.postMessage(msg);
     else this.pending.push(msg);
+  }
+
+  /** For the repo tour and deploy check: a line in this session's wrap-up. */
+  logEvent(kind: string, detail: string): void {
+    this.log(kind, detail);
   }
 
   private log(kind: string, detail: string, also?: () => void): void {

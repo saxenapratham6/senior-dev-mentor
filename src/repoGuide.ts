@@ -8,7 +8,11 @@ import { createHash } from "crypto";
 import { promises as fs } from "fs";
 import { gitignore } from "./repo/files";
 import { BUDGETS, Budget, estimateCost, indexDigest, planSend } from "./tour/ai/digest";
-import { PROMPT_VERSION, SummaryCache, writeAiTour } from "./tour/ai/writer";
+import { PROMPT_VERSION, SummaryCache, writeAiTour, writeAiTrace } from "./tour/ai/writer";
+import { buildTrace, traceStarts, traceTour } from "./tour/trace";
+import { buildChangeTour, changeCandidates } from "./tour/change";
+import { deployReport, explainDeploy, DeployReport } from "./deploy/report";
+import { isSecretPath } from "./repo/files";
 import type { AiSetup } from "./mentorView";
 import { ProviderError } from "./providers/types";
 import { walkRepo, recentChanges } from "./repo/walk";
@@ -43,6 +47,13 @@ export class RepoGuide implements vscode.Disposable {
   private aiStatus: { state: "idle" | "working" | "error"; text?: string; action?: "setApiKey" | "openSettings" } = { state: "idle" };
   /** Set by extension.ts: which model writes AI tours. */
   aiSetup?: () => Promise<AiSetup>;
+  /** Set by extension.ts: notes for the session wrap-up. */
+  onEvent?: (kind: string, detail: string) => void;
+  private goal: "tour" | "trace" | "change" | "deploy" = "tour";
+  private question = ""; // the last "what happens when…"
+  private task = ""; // the last "I need to change…"
+  private deploy?: DeployReport;
+  private deployTarget?: string;
   private readonly disposables: vscode.Disposable[] = [];
 
   constructor(
@@ -72,6 +83,9 @@ export class RepoGuide implements vscode.Disposable {
   get stop(): number {
     return this.at;
   }
+  get deployCheck(): DeployReport | undefined {
+    return this.deploy;
+  }
 
   // -------------------------------------------------------------- commands
 
@@ -79,6 +93,7 @@ export class RepoGuide implements vscode.Disposable {
   async open(): Promise<void> {
     const index = await this.load();
     if (!index) return;
+    this.goal = "tour";
     this.tour = (await this.savedAiTour()) ?? buildRepoTour(index, this.level);
     await this.render();
   }
@@ -152,8 +167,25 @@ export class RepoGuide implements vscode.Disposable {
       case "aiBasic":
         if (this.index) this.tour = buildRepoTour(this.index, this.level);
         return this.render();
+      case "goal":
+        this.goal = a.goal;
+        if (a.goal === "deploy") return this.showDeploy();
+        if (a.goal === "tour" && this.index && this.tour?.kind !== "repo") this.tour = (await this.savedAiTour()) ?? buildRepoTour(this.index, this.level);
+        return this.render();
+      case "traceRun":
+        return this.trace(a.question, a.start, a.ai);
+      case "changeRun":
+        return this.change(a.task, a.ai);
+      case "deployTarget":
+        this.deployTarget = a.id;
+        if (this.deploy) this.deploy = { ...deployReport(this.index!, this.texts, a.id).report, explained: undefined };
+        return this.showDeploy(false);
+      case "deployExplain":
+        return this.explainDeploy();
       case "openFile": {
         if (!this.indexRoot) return;
+        // "Show me" never opens a file that may hold secrets, even if asked to.
+        if (isSecretPath(a.path)) return;
         const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(path.join(this.indexRoot, ...a.path.split("/"))));
         const pos = new vscode.Position(a.line ?? 0, 0);
         await vscode.window.showTextDocument(doc, { viewColumn: vscode.ViewColumn.One, selection: new vscode.Range(pos, pos) });
@@ -186,6 +218,9 @@ export class RepoGuide implements vscode.Disposable {
 
   private async relevel(): Promise<void> {
     if (!this.index || !this.tour) return this.open();
+    if (this.goal === "deploy") return this.showDeploy(false);
+    if (this.tour.kind === "trace" && this.question) return this.trace(this.question, undefined, false);
+    if (this.tour.kind === "change" && this.task) return this.change(this.task, false);
     const wasAt = this.panda.tourTag === TAG ? this.at : -1;
     const kind = this.tour.kind;
     const rel = kind === "repo" ? "" : flatStops(this.tour)[0]?.path;
@@ -218,6 +253,7 @@ export class RepoGuide implements vscode.Disposable {
 
   private async render(): Promise<void> {
     if (!this.index || !this.tour) return;
+    if (this.goal === "deploy" && this.deploy) return this.showDeploy(false);
     const saved = this.saved();
     const total = flatStops(this.tour).length;
     this.board.show({
@@ -227,8 +263,131 @@ export class RepoGuide implements vscode.Disposable {
       level: this.level,
       at: this.panda.tourTag === TAG ? this.at : -1,
       resumeAt: this.tour.kind === "repo" && saved && saved.at > 0 && saved.at < total && saved.stops === total ? saved.at : undefined,
-      ai: this.tour.kind === "repo" ? await this.aiPanel() : undefined,
+      ai: ["repo", "trace", "change"].includes(this.tour.kind) ? await this.aiPanel() : undefined,
+      goal: this.goal,
+      suggestions: traceStarts(this.index, "", this.texts).map((s) => s.label),
+      question: this.question,
+      task: this.task,
     });
+  }
+
+  // -------------------------------------------------------------- follow a request, make a change
+
+  /** "What happens when…": the no-AI trace, or (with `ai`) one written by the model and checked. */
+  async trace(question: string, startIndex?: number, ai = false): Promise<void> {
+    const index = await this.load();
+    if (!index) return;
+    this.goal = "trace";
+    this.question = question.trim();
+    const starts = traceStarts(index, this.question, this.texts);
+    const all = traceStarts(index, "", this.texts);
+    const start = startIndex !== undefined ? all[startIndex] : starts[0];
+    const { steps, sequence } = start ? buildTrace(index, this.texts, start, this.question || start.label) : { steps: [], sequence: { question: this.question, actors: [], messages: [] } };
+    this.tour = traceTour(this.question || start?.label || "", steps, sequence, this.level);
+    if (ai) {
+      const done = await this.withAi("trace", async (setup, signal) =>
+        writeAiTrace({ index, texts: this.texts, provider: await setup.provider(), level: this.level, question: this.question || start?.label || "", start, steps, never: this.never, guard: setup.guard, signal }),
+      );
+      if (!done) return;
+      this.tour = done;
+    }
+    this.onEvent?.("traced", `${this.question || start?.label}${ai ? " (with AI)" : ""}: ${flatStops(this.tour).map((s) => s.path).join(" → ")}`);
+    await this.render();
+    if (flatStops(this.tour).length) await this.walk(0);
+  }
+
+  /** "I need to change…": where the change goes, what else it touches, which tests to run. */
+  async change(task: string, ai = false): Promise<void> {
+    const index = await this.load();
+    if (!index) return;
+    this.goal = "change";
+    this.task = task.trim();
+    this.tour = buildChangeTour(index, this.texts, this.task, this.level);
+    if (ai && this.task) {
+      const candidates = changeCandidates(index, this.texts, this.task).map((c) => c.path);
+      const done = await this.withAi("change", async (setup, signal) => {
+        const cacheFile = vscode.Uri.joinPath(this.ctx.globalStorageUri, "repo-summaries", `${createHash("sha1").update(this.indexRoot!).digest("hex").slice(0, 16)}.json`).fsPath;
+        const r = await writeAiTour({
+          index,
+          texts: this.texts,
+          provider: await setup.provider(),
+          model: setup.model,
+          level: this.level,
+          budget: "small",
+          never: this.never,
+          cache: new SummaryCache(cacheFile),
+          guard: setup.guard,
+          signal,
+          goal: { kind: "change", task: this.task, candidates },
+          onProgress: (text) => this.board.update({ type: "aiProgress", text }),
+        });
+        return r.tour;
+      });
+      if (!done) return;
+      this.tour = done;
+    }
+    this.onEvent?.("change planned", `${this.task}${ai ? " (with AI)" : ""}: ${flatStops(this.tour).map((s) => s.path).join(", ") || "nothing found"}`);
+    await this.render();
+    if (flatStops(this.tour).length) await this.walk(0);
+  }
+
+  /** Runs an AI step with the same consent, progress and error handling as the AI tour. */
+  private async withAi<T>(what: string, run: (setup: AiSetup, signal: AbortSignal) => Promise<T>): Promise<T | undefined> {
+    if (!this.aiSetup || this.aiAbort) return undefined;
+    const setup = await this.aiSetup();
+    if (!setup.ready) {
+      this.aiStatus = { state: "error", text: "Add an Anthropic API key first, or switch to a free local model (Ollama) in settings.", action: "setApiKey" };
+      await this.render();
+      return undefined;
+    }
+    const abort = (this.aiAbort = new AbortController());
+    this.aiStatus = { state: "working", text: what === "trace" ? "Following the code…" : what === "deploy" ? "Writing your deploy guide…" : "Finding where your change goes…" };
+    await this.render();
+    this.panda.think(true);
+    try {
+      const out = await run(setup, abort.signal);
+      this.aiStatus = { state: "idle" };
+      return out;
+    } catch (e) {
+      this.aiStatus = abort.signal.aborted ? { state: "idle" } : { state: "error", text: e instanceof Error ? e.message : String(e), action: e instanceof ProviderError ? e.action : undefined };
+      await this.render();
+      return undefined;
+    } finally {
+      this.aiAbort = undefined;
+      this.panda.think(false);
+    }
+  }
+
+  // -------------------------------------------------------------- deploy
+
+  /** "How do I deploy this?": the checks, where it can go, and the steps. */
+  async showDeploy(rebuild = true): Promise<void> {
+    const index = await this.load();
+    if (!index) return;
+    this.goal = "deploy";
+    if (rebuild || !this.deploy) {
+      this.deploy = deployReport(index, this.texts, this.deployTarget).report;
+      const s = this.deploy.score;
+      this.onEvent?.("deploy check", `${this.deploy.app.words}: ${s.pass} ready, ${s.warn} to look at, ${s.fail} to fix before deploying`);
+    }
+    const setup = this.aiSetup ? await this.aiSetup() : undefined;
+    this.board.show({
+      type: "deploy",
+      report: this.deploy,
+      level: this.level,
+      ai: setup && { kind: setup.kind, label: setup.label, ready: setup.ready, state: this.aiStatus.state, text: this.aiStatus.text, action: this.aiStatus.action },
+    });
+  }
+
+  private async explainDeploy(): Promise<void> {
+    if (!this.index || !this.deploy) return;
+    const index = this.index;
+    const report = this.deploy;
+    const out = await this.withAi("deploy", async (setup, signal) =>
+      explainDeploy({ index, texts: this.texts, report, provider: await setup.provider(), level: this.level, guard: setup.guard, signal, never: this.never }),
+    );
+    if (out && this.deploy === report) this.deploy = { ...report, explained: out };
+    await this.showDeploy(false);
   }
 
   // -------------------------------------------------------------- the AI tour

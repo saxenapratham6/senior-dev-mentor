@@ -15,6 +15,9 @@ A panda lives in your code editor, and the sidebar is just a conversation.
 | **The panda in your editor** | It sits beside the line you're working on and strolls over when you pause, thinks while the mentor works, and naps when you're idle. After a review, hint or error explanation it walks line by line to each spot worth a look and says a short question in a speech bubble. Hover the line for the full explanation, **Explain more**, **Next stop** or **Got it**. Edit the line and it moves on. |
 | **Repo tour** | Opened a project you've never seen? Press the compass and the panda shows you around it, the way a senior engineer onboards a new teammate. The board shows the map: what the project is, where the program starts, the files that do the work (with the reasons, like "imported by 6 files" or "handles 3 web addresses"), what each folder is for, and what's safe to skip. Then the panda walks you through it file by file, line by line, from the entry point to the core files to how it's set up and tested. Choose **New to this** (every term explained the first time) or **Experienced** (short and dense). Right-click any file or folder and choose **Explain with the Mentor** for a shorter walk through just that part. The map and this tour need no AI: everything comes from reading the code, so they're fast, free and work offline. Files that may hold secrets, like `.env`, are never opened. |
 | **AI-written tour** | Want more? Press **Write the tour with AI**. The board first shows exactly what would be sent (which files, about how many tokens, about what it costs, and to whom) and nothing leaves your computer until you press it. The model reads the important files and writes the big picture, a diagram of how the parts connect, one feature followed end to end, and every stop in three versions: the explanation, **Simpler** and **Deeper**, plus questions to check yourself. Every stop must quote the line it talks about; a stop whose quote isn't in your file is moved to where it is, or thrown away. Summaries are cached, so a second tour only re-reads files that changed. |
+| **Follow what happens** | Type "a user adds a todo" or "I run npm start" (or pick a route from the suggestions) and the panda follows it through the code: the route that receives it, each function in another file it calls, down to the database. The board draws who talks to whom as a sequence diagram; click an arrow to walk there. It works by reading what each step's code really uses; **With AI** has the model refine it, checked against your files the same way as the tour. |
+| **I need to change something** | Describe the change ("add a due date to todos"). The panda shows where to start reading, what else uses that code and might break, and which tests to run afterwards, then asks how you'll know you're done. It never writes the change. |
+| **How do I deploy this?** | The rocket tab works out what kind of app this is (an API server, a single-page app, a command-line tool…) and checks it's ready: start and build commands, the port, listening on `0.0.0.0`, environment variables written down, no keys in the code, `.env` kept out of git, locked dependency versions, debug mode off, where the database's data lives, a health check. Each check says why it matters for someone who has never deployed, what to change (in words), and **Show me** walks to the line. Then it suggests hosts that fit (the one your repo is already set up for comes first: `fly.toml`, `vercel.json`, a `Procfile`…) and gives the steps for the one you pick, with the one-line commands you type yourself and what could go wrong. **Explain it for me** has the AI walk you through it at your level; it can't change a check, and only the chosen host's commands get through. The mentor never runs a deploy and never reads `.env` files. |
 | **Plan** | Describe your approach *before* writing code; the mentor points out gaps and edge cases. |
 | **Hint** | Three levels: a nudge (one question), then the concept, then a plain-English plan. Each level unlocks only after you change your code or write down what you tried. There is no fourth level with the answer. |
 | **Review** | One thing you did well, then questions that lead you to the bugs. No fixes. |
@@ -114,6 +117,9 @@ src/
   repo/             reading a repo without AI: files, manifests, imports, entry points, routes, ranking
   tour/             the tour itself (chapters and stops at two levels) and what the board shows
   tour/ai/          the AI tour: what gets sent (digest, excerpts, redaction), prompts, checks
+  tour/trace.ts     follow a request through the files; the sequence diagram
+  tour/change.ts    where a change goes, what it touches, which tests to run
+  deploy/           what kind of app it is, readiness checks, hosts and their steps
   lessons/          lesson parser, Python runner, practice-file format
   board.ts          the panda's board panel
   editorPanda.ts    the panda in the editor: follow, sleep, think, walk, speak
@@ -124,7 +130,7 @@ src/
   providers/        Claude (Anthropic SDK) and Ollama
 lessons/            the 29 lessons, as Markdown
 test/solutions/     reference solutions for every exercise (tests only)
-test/fixtures/repos small sample projects (Flask, Express, React, Go, Python CLI) the repo tour is tested on
+test/fixtures/repos small sample projects (Flask, Express, React, Go, Python CLI, FastAPI) the repo tour and deploy check are tested on
 media/              sidebar chat, the board, scene player, algorithm steps
 media/panda/        panda poses (sit, walk, think, talk, cheer, sleep)
 test/               node:test suites

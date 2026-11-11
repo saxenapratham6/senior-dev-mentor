@@ -28,8 +28,15 @@ export function redactSecrets(text: string): { text: string; count: number } {
   for (const re of PATTERNS)
     out = out.replace(re, (m) => {
       count++;
-      // Keep a URL's scheme and host readable; only the credentials go.
-      return /^[a-z][a-z0-9+.-]*:\/\//i.test(m) ? m.replace(/\/\/.*@$/, `//${REDACTED}@`) : REDACTED;
+      // Keep a URL's scheme and host readable; only the credentials go. Placeholders stay.
+      if (/^[a-z][a-z0-9+.-]*:\/\//i.test(m)) {
+        if (/:\/\/[^:]*:(password|passwd|pass|pwd|secret|changeme|<[^>]*>|\$\{?\w+\}?|x+|\*+)@$/i.test(m)) {
+          count--;
+          return m;
+        }
+        return m.replace(/\/\/.*@$/, `//${REDACTED}@`);
+      }
+      return REDACTED;
     });
   out = out.replace(ASSIGNED, (m, name: string, sep: string, q: string, value: string) => {
     if (value === REDACTED || /^(process\.env|os\.environ|\$\{|<|your|xxx|changeme|example|placeholder|test|dummy)/i.test(value)) return m;

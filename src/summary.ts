@@ -108,6 +108,7 @@ export function summaryPrompt(): string {
 - Give the student the credit for what they worked out. If they asked for answers and were redirected, don't scold.
 - "stillFuzzy" items are questions to revisit, not criticism.
 - If they checked a plan, say which parts of it they got through, based on the conversation.
+- If they explored a repository (tours, "traced", "change planned", "deploy check" in the timeline), say what they found their way around, and put any failing deploy checks under nextTime.
 - No code, no solutions, no long explanations. Short items, at most about 20 words each.`;
 }
 
