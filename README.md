@@ -13,7 +13,8 @@ A panda lives in your code editor, and the sidebar is just a conversation.
 | | |
 |---|---|
 | **The panda in your editor** | It sits beside the line you're working on and strolls over when you pause, thinks while the mentor works, and naps when you're idle. After a review, hint or error explanation it walks line by line to each spot worth a look and says a short question in a speech bubble. Hover the line for the full explanation, **Explain more**, **Next stop** or **Got it**. Edit the line and it moves on. |
-| **Repo tour** | Opened a project you've never seen? Press the compass and the panda shows you around it, the way a senior engineer onboards a new teammate. The board shows the map: what the project is, where the program starts, the files that do the work (with the reasons, like "imported by 6 files" or "handles 3 web addresses"), what each folder is for, and what's safe to skip. Then the panda walks you through it file by file, line by line, from the entry point to the core files to how it's set up and tested. Choose **New to this** (every term explained the first time) or **Experienced** (short and dense). Right-click any file or folder and choose **Explain with the Mentor** for a shorter walk through just that part. It needs no AI: everything comes from reading the code, so it's fast, free and works offline. Files that may hold secrets, like `.env`, are never opened. |
+| **Repo tour** | Opened a project you've never seen? Press the compass and the panda shows you around it, the way a senior engineer onboards a new teammate. The board shows the map: what the project is, where the program starts, the files that do the work (with the reasons, like "imported by 6 files" or "handles 3 web addresses"), what each folder is for, and what's safe to skip. Then the panda walks you through it file by file, line by line, from the entry point to the core files to how it's set up and tested. Choose **New to this** (every term explained the first time) or **Experienced** (short and dense). Right-click any file or folder and choose **Explain with the Mentor** for a shorter walk through just that part. The map and this tour need no AI: everything comes from reading the code, so they're fast, free and work offline. Files that may hold secrets, like `.env`, are never opened. |
+| **AI-written tour** | Want more? Press **Write the tour with AI**. The board first shows exactly what would be sent (which files, about how many tokens, about what it costs, and to whom) and nothing leaves your computer until you press it. The model reads the important files and writes the big picture, a diagram of how the parts connect, one feature followed end to end, and every stop in three versions: the explanation, **Simpler** and **Deeper**, plus questions to check yourself. Every stop must quote the line it talks about; a stop whose quote isn't in your file is moved to where it is, or thrown away. Summaries are cached, so a second tour only re-reads files that changed. |
 | **Plan** | Describe your approach *before* writing code; the mentor points out gaps and edge cases. |
 | **Hint** | Three levels: a nudge (one question), then the concept, then a plain-English plan. Each level unlocks only after you change your code or write down what you tried. There is no fourth level with the answer. |
 | **Review** | One thing you did well, then questions that lead you to the bugs. No fixes. |
@@ -40,7 +41,8 @@ Telling an AI model "don't give the answer" isn't enough: models drift, and stud
 1. **Request filter.** Requests that delegate the work ("write it for me", "give me the full code", "solve this", "ignore your instructions") never reach the model. The student gets a redirect that asks them a question instead.
 2. **Output filter.** Every reply streams through a filter that hides fenced or unfenced code longer than **3 lines** or **120 characters**, and inline code longer than 60 characters. A hidden block is replaced by a note telling the student to write it themselves.
 3. **Hint ladder.** The extension, not the model, decides how much help to give, and requires proof of effort between rungs ([`src/hintLadder.ts`](src/hintLadder.ts)).
-4. **Visualizations are data, not code.** The model returns a scene: snapshots of data structures checked against a schema ([`src/scene.ts`](src/scene.ts)). Unknown references are dropped, sizes are capped, and every caption goes through the output filter.
+4. **Repo tours quote, they don't write.** The AI tour may show your repo's own code, but only code that really is in your files: any other code still goes through the output filter. Before anything is sent, files that may hold secrets are skipped and key-shaped strings (API keys, tokens, private keys, passwords in URLs) are blanked out; a test plants fake keys and checks that none reaches a prompt. Put paths in a `.mentorignore` file (gitignore syntax) to never send them.
+5. **Visualizations are data, not code.** The model returns a scene: snapshots of data structures checked against a schema ([`src/scene.ts`](src/scene.ts)). Unknown references are dropped, sizes are capped, and every caption goes through the output filter.
 
 The limits are unit-tested (`npm test`). In a live test, a small local model ignored the prompt and wrote a full 19-line binary search; the output filter hid it.
 
@@ -79,6 +81,7 @@ The limits are unit-tested (`npm test`). In a live test, a small local model ign
 | `seniorDevMentor.offerTourOnOpen` | `true` | The panda offers a tour once in a new project with 20+ code files |
 | `seniorDevMentor.tourMaxFiles` | `20000` | The repo tour stops listing files after this many |
 | `seniorDevMentor.useGitHistory` | `true` | Rank recently changed files a little higher (`git log`, read only) |
+| `seniorDevMentor.tourBudget` | `medium` | How much code the AI tour may read: `small` (~25k tokens), `medium` (~60k), `large` (~150k) |
 | `seniorDevMentor.pythonPath` | `""` | Python for running lesson examples and checking exercises (default `python3`, or `python` on Windows) |
 
 ## Icons
@@ -110,6 +113,7 @@ src/
   repoGuide.ts      the repo tour: reads the workspace, shows the map, sends the panda file to file
   repo/             reading a repo without AI: files, manifests, imports, entry points, routes, ranking
   tour/             the tour itself (chapters and stops at two levels) and what the board shows
+  tour/ai/          the AI tour: what gets sent (digest, excerpts, redaction), prompts, checks
   lessons/          lesson parser, Python runner, practice-file format
   board.ts          the panda's board panel
   editorPanda.ts    the panda in the editor: follow, sleep, think, walk, speak

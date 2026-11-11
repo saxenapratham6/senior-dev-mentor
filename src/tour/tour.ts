@@ -13,6 +13,10 @@ export interface TourStop {
   title: string; // shown in the outline
   bubble: string; // one sentence, for the panda's speech bubble
   note: string; // Markdown, shown when you hover the line and in the sidebar
+  /** AI tours: the same idea said more simply, more deeply, and a question to check yourself. */
+  simpler?: string;
+  deeper?: string;
+  check?: { question: string; answer: string };
 }
 
 export interface Chapter {
@@ -35,6 +39,8 @@ export interface Tour {
   message?: string;
   chapters: Chapter[];
   quiz: QuizQuestion[];
+  /** Set when an AI model wrote the tour. */
+  ai?: { label: string; overview: import("./ai/schema").Overview; files: number; checked: { kept: number; moved: number; dropped: number } };
 }
 
 export const LIMITS = { new: { stops: 15, core: 8 }, experienced: { stops: 10, core: 6 } };

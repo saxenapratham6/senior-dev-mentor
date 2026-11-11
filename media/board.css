@@ -385,3 +385,39 @@ ul.skip li { margin: 6px 0; line-height: 1.45; }
 ul.quiz-list li { margin: 6px 0; }
 ul.quiz-list summary { cursor: pointer; }
 ul.quiz-list p { margin: 4px 0 0 16px; color: var(--muted); }
+
+/* ------------------------------------------------------------ the AI tour */
+
+.ai-card p { margin: 0 0 8px; line-height: 1.5; }
+.ai-card .row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.ai-card.done { padding: 8px 14px; }
+.ai-card.done p { margin: 0 0 4px; }
+.ai-card .codicon-sparkle { color: var(--vscode-textLink-foreground); }
+.ai-card details.sent { margin: 0 0 10px; }
+.ai-card details.sent summary { cursor: pointer; color: var(--vscode-textLink-foreground); }
+.ai-card details.sent ul { columns: 2; column-gap: 16px; margin: 6px 0 0; padding-left: 18px; font-size: 0.9em; }
+@media (max-width: 520px) { .ai-card details.sent ul { columns: 1; } }
+.ai-progress { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); }
+.ai-error { color: var(--vscode-errorForeground, var(--bad)); }
+.card h3 { font-size: 0.95em; margin: 10px 0 4px; }
+.card .md p, .card > p + p { margin-top: 6px; }
+.arch-wrap { overflow-x: auto; }
+svg.arch { display: block; width: 100%; max-width: 760px; min-width: 320px; height: auto; font-family: var(--vscode-font-family); }
+.arch-box rect { fill: var(--vscode-editor-background); stroke: var(--muted); stroke-width: 1.2; }
+.arch-box.code rect { stroke: var(--bar); stroke-width: 1.6; }
+.arch-box.code { cursor: pointer; }
+.arch-box.code:hover rect, .arch-box.code:focus rect { fill: var(--vscode-list-hoverBackground); }
+.arch-box text { fill: var(--vscode-foreground); font-size: 12px; font-weight: 600; text-anchor: middle; }
+.arch-box text.arch-files { fill: var(--muted); font-size: 10px; font-weight: normal; }
+.arch-link { fill: none; stroke: var(--muted); stroke-width: 1.4; }
+.arch-label { fill: var(--muted); font-size: 10px; text-anchor: middle; paint-order: stroke; stroke: var(--vscode-sideBar-background); stroke-width: 3px; }
+dl.glossary { margin: 0; }
+dl.glossary dt { font-weight: 600; margin-top: 6px; }
+dl.glossary dd { margin: 2px 0 0 0; color: var(--muted); line-height: 1.45; }
+.tour-now { margin: 0 0 10px; }
+.now-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px; margin-bottom: 6px; }
+.now-head .segmented { margin-left: auto; }
+.segmented.small button { padding: 2px 8px; font-size: 0.9em; }
+.now-text p { margin: 0 0 6px; line-height: 1.5; }
+.now-check { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border); line-height: 1.5; }
+.now-check p { margin: 4px 0 0; }

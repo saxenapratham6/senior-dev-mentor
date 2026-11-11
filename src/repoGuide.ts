@@ -1,17 +1,27 @@
 // The repo tour: reads the workspace, shows its map on the panda's board,
-// and sends the panda from file to file. Nothing here calls an AI model.
+// and sends the panda from file to file. The map and the basic tour need no
+// AI. With the student's go-ahead, an AI model can write a richer tour, which
+// is checked against the real files before the panda uses it.
 import * as vscode from "vscode";
 import * as path from "path";
+import { createHash } from "crypto";
+import { promises as fs } from "fs";
+import { gitignore } from "./repo/files";
+import { BUDGETS, Budget, estimateCost, indexDigest, planSend } from "./tour/ai/digest";
+import { PROMPT_VERSION, SummaryCache, writeAiTour } from "./tour/ai/writer";
+import type { AiSetup } from "./mentorView";
+import { ProviderError } from "./providers/types";
 import { walkRepo, recentChanges } from "./repo/walk";
 import { buildIndex } from "./repo/index";
 import type { RepoIndex } from "./repo/types";
 import { buildFileTour, buildFolderTour, buildRepoTour, flatStops, Level, Tour } from "./tour/tour";
 import type { EditorPanda, PandaWhereabouts } from "./editorPanda";
-import type { PandaBoard, RepoAction } from "./board";
+import type { AiPanel, PandaBoard, RepoAction } from "./board";
 import { repoView, tourView } from "./tour/view";
 
 const PROGRESS_KEY = "seniorDevMentor.repoTour";
 const OFFERED_KEY = "seniorDevMentor.tourOffered";
+const AI_TOURS_KEY = "seniorDevMentor.aiTours";
 const MAX_STOPS = 40;
 const TAG = "repoGuide";
 
@@ -25,8 +35,14 @@ export class RepoGuide implements vscode.Disposable {
   private indexRoot?: string;
   private stale = true;
   private building?: Promise<RepoIndex | undefined>;
+  private texts = new Map<string, string | undefined>();
   private tour?: Tour;
   private at = -1; // the panda's stop in the current tour, or -1
+  private never: (p: string) => boolean = () => false; // .mentorignore
+  private aiAbort?: AbortController;
+  private aiStatus: { state: "idle" | "working" | "error"; text?: string; action?: "setApiKey" | "openSettings" } = { state: "idle" };
+  /** Set by extension.ts: which model writes AI tours. */
+  aiSetup?: () => Promise<AiSetup>;
   private readonly disposables: vscode.Disposable[] = [];
 
   constructor(
@@ -63,16 +79,16 @@ export class RepoGuide implements vscode.Disposable {
   async open(): Promise<void> {
     const index = await this.load();
     if (!index) return;
-    this.tour = buildRepoTour(index, this.level);
-    this.render();
+    this.tour = (await this.savedAiTour()) ?? buildRepoTour(index, this.level);
+    await this.render();
   }
 
   /** Start (or resume) the tour of the whole repo. */
   async start(at = 0): Promise<void> {
     const index = await this.load();
     if (!index) return;
-    if (this.tour?.kind !== "repo" || this.tour.level !== this.level) this.tour = buildRepoTour(index, this.level);
-    this.render(); // the board opens first, so the panda isn't sent off to present on it afterwards
+    if (this.tour?.kind !== "repo" || this.tour.level !== this.level) this.tour = (await this.savedAiTour()) ?? buildRepoTour(index, this.level);
+    await this.render(); // the board opens first, so the panda isn't sent off to present on it afterwards
     await this.walk(at);
   }
 
@@ -94,7 +110,7 @@ export class RepoGuide implements vscode.Disposable {
       // gone: buildFileTour says so
     }
     this.tour = !rel ? buildRepoTour(index, this.level) : isDir ? buildFolderTour(index, rel, this.level) : buildFileTour(index, rel, this.level);
-    this.render();
+    await this.render();
     if (this.tour.message) {
       this.panda.say(this.tour.message, "talk", 7000);
       void vscode.window.showInformationMessage(`Mentor: ${this.tour.message}`);
@@ -128,6 +144,14 @@ export class RepoGuide implements vscode.Disposable {
       }
       case "repoMap":
         return this.open();
+      case "aiTour":
+        return this.writeWithAi();
+      case "aiCancel":
+        this.aiAbort?.abort();
+        return;
+      case "aiBasic":
+        if (this.index) this.tour = buildRepoTour(this.index, this.level);
+        return this.render();
       case "openFile": {
         if (!this.indexRoot) return;
         const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(path.join(this.indexRoot, ...a.path.split("/"))));
@@ -167,11 +191,11 @@ export class RepoGuide implements vscode.Disposable {
     const rel = kind === "repo" ? "" : flatStops(this.tour)[0]?.path;
     this.tour =
       kind === "repo" || !rel
-        ? buildRepoTour(this.index, this.level)
+        ? ((await this.savedAiTour()) ?? buildRepoTour(this.index, this.level))
         : kind === "file"
           ? buildFileTour(this.index, rel, this.level)
           : buildFolderTour(this.index, rel.split("/").slice(0, -1).join("/"), this.level);
-    this.render();
+    await this.render();
     if (wasAt >= 0) await this.walk(Math.min(wasAt, flatStops(this.tour).length - 1));
   }
 
@@ -192,7 +216,7 @@ export class RepoGuide implements vscode.Disposable {
     }
   }
 
-  private render(): void {
+  private async render(): Promise<void> {
     if (!this.index || !this.tour) return;
     const saved = this.saved();
     const total = flatStops(this.tour).length;
@@ -203,7 +227,104 @@ export class RepoGuide implements vscode.Disposable {
       level: this.level,
       at: this.panda.tourTag === TAG ? this.at : -1,
       resumeAt: this.tour.kind === "repo" && saved && saved.at > 0 && saved.at < total && saved.stops === total ? saved.at : undefined,
+      ai: this.tour.kind === "repo" ? await this.aiPanel() : undefined,
     });
+  }
+
+  // -------------------------------------------------------------- the AI tour
+
+  private get budget(): Budget {
+    const b = vscode.workspace.getConfiguration("seniorDevMentor").get<string>("tourBudget", "medium");
+    return b in BUDGETS ? (b as Budget) : "medium";
+  }
+
+  /** What the consent card says: which model, how many files, about how many tokens and dollars. */
+  private async aiPanel(): Promise<AiPanel | undefined> {
+    if (!this.index || !this.aiSetup) return undefined;
+    const setup = await this.aiSetup();
+    const plan = planSend(this.index, this.texts, this.budget, this.never);
+    return {
+      kind: setup.kind,
+      label: setup.label,
+      ready: setup.ready,
+      files: plan.files,
+      tokens: plan.inputTokens,
+      cost: setup.kind === "anthropic" ? estimateCost(setup.model, plan.inputTokens, plan.outputTokens) : undefined,
+      budget: this.budget,
+      state: this.aiStatus.state,
+      text: this.aiStatus.text,
+      action: this.aiStatus.action,
+      written: !!this.tour?.ai,
+    };
+  }
+
+  private async aiKey(level: Level, model: string): Promise<string | undefined> {
+    if (!this.index) return undefined;
+    return createHash("sha1").update(`${PROMPT_VERSION}\0${level}\0${model}\0${this.budget}\0${indexDigest(this.index)}`).digest("hex");
+  }
+
+  /** An AI tour written earlier for this exact state of the repo, level and model: free to reuse. */
+  private async savedAiTour(): Promise<Tour | undefined> {
+    if (!this.aiSetup) return undefined;
+    const key = await this.aiKey(this.level, (await this.aiSetup()).model);
+    const all = this.ctx.workspaceState.get<Record<string, Tour>>(AI_TOURS_KEY) ?? {};
+    return key ? all[key] : undefined;
+  }
+
+  private async writeWithAi(): Promise<void> {
+    if (!this.index || !this.indexRoot || !this.aiSetup || this.aiAbort) return;
+    const setup = await this.aiSetup();
+    if (!setup.ready) {
+      this.aiStatus = { state: "error", text: "Add an Anthropic API key first, or switch to a free local model (Ollama) in settings.", action: "setApiKey" };
+      return this.render();
+    }
+    const abort = (this.aiAbort = new AbortController());
+    const index = this.index;
+    const level = this.level;
+    this.aiStatus = { state: "working", text: "Getting started…" };
+    await this.render();
+    this.panda.think(true);
+    try {
+      const cacheFile = vscode.Uri.joinPath(this.ctx.globalStorageUri, "repo-summaries", `${createHash("sha1").update(this.indexRoot).digest("hex").slice(0, 16)}.json`).fsPath;
+      const result = await writeAiTour({
+        index,
+        texts: this.texts,
+        provider: await setup.provider(),
+        model: setup.model,
+        level,
+        budget: this.budget,
+        never: this.never,
+        cache: new SummaryCache(cacheFile),
+        guard: setup.guard,
+        signal: abort.signal,
+        onProgress: (text) => {
+          this.aiStatus = { state: "working", text };
+          this.board.update({ type: "aiProgress", text });
+        },
+      });
+      const key = await this.aiKey(level, setup.model);
+      if (key) {
+        // Keep the last few, so switching levels back and forth doesn't pay twice.
+        const all = this.ctx.workspaceState.get<Record<string, Tour>>(AI_TOURS_KEY) ?? {};
+        const kept = Object.fromEntries([...Object.entries(all).filter(([k]) => k !== key).slice(-3), [key, result.tour]]);
+        await this.ctx.workspaceState.update(AI_TOURS_KEY, kept);
+      }
+      this.aiStatus = { state: "idle" };
+      if (this.index === index && this.level === level) {
+        this.tour = result.tour;
+        await this.render();
+        await this.walk(0);
+      }
+    } catch (e) {
+      const cancelled = abort.signal.aborted;
+      this.aiStatus = cancelled
+        ? { state: "idle" }
+        : { state: "error", text: e instanceof ProviderError || e instanceof Error ? e.message : String(e), action: e instanceof ProviderError ? e.action : undefined };
+      await this.render();
+    } finally {
+      this.aiAbort = undefined;
+      this.panda.think(false);
+    }
   }
 
   /** The workspace folder to read: the one holding `uri` (or the open file), else the first. */
@@ -226,12 +347,19 @@ export class RepoGuide implements vscode.Disposable {
     const cfg = vscode.workspace.getConfiguration("seniorDevMentor");
     this.building = (async () => {
       try {
+        try {
+          const match = gitignore(await fs.readFile(path.join(root, ".mentorignore"), "utf8"));
+          this.never = (p) => p.split("/").some((_, i, parts) => match(parts.slice(0, i + 1).join("/"), i < parts.length - 1));
+        } catch {
+          this.never = () => false;
+        }
         const [walked, changes] = await Promise.all([
           walkRepo(root, { maxFiles: cfg.get<number>("tourMaxFiles", 20000) }),
           cfg.get<boolean>("useGitHistory", true) ? recentChanges(root) : Promise.resolve(new Map<string, number>()),
         ]);
         this.stale = false;
         this.indexRoot = root;
+        this.texts = new Map(walked.files.map((f) => [f.path, f.text]));
         this.index = buildIndex(walked.files, { rootName: path.basename(root), changes, totalFiles: walked.totalFiles, truncated: walked.truncated });
         return this.index;
       } catch (e) {

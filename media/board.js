@@ -449,6 +449,80 @@
 
   let repoMsg = null;
 
+  /** Notes are a little Markdown: paragraphs, `code`, **bold** and *italic*. */
+  const md = (s) =>
+    (s || "")
+      .split(/\n\n+/)
+      .map((p) => `<p>${rich(p).replace(/(^|[^*\w])\*([^*\n]+)\*(?!\*)/g, "$1<i>$2</i>").replace(/\n/g, "<br>")}</p>`)
+      .join("");
+
+  function aiCard(ai, tour) {
+    if (!ai) return "";
+    if (ai.written && tour.ai) {
+      const c = tour.ai.checked;
+      return `<section class="card ai-card done"><p><i class="codicon codicon-sparkle"></i> Written by ${esc(tour.ai.label)} from ${plural(tour.ai.files, "file", "files")}, then checked against your code: ${plural(c.kept, "stop", "stops")} kept${c.moved ? `, ${c.moved} moved to the line it quoted` : ""}${c.dropped ? `, ${c.dropped} thrown away because the code it quoted isn't there` : ""}.</p><button class="link" id="aiBasic">${icon2("list-flat")}Use the basic tour instead</button></section>`;
+    }
+    const cost = ai.cost !== undefined ? ` · about $${ai.cost < 0.01 ? "0.01" : ai.cost.toFixed(2)}` : "";
+    const where =
+      ai.kind === "ollama"
+        ? "Everything stays on this computer."
+        : "Excerpts of these files go to Anthropic. Files that may hold passwords or keys are never sent, and anything in the code that looks like a key is blanked out first. List paths in a <code>.mentorignore</code> file to keep them out.";
+    const working = ai.state === "working";
+    return `<section class="card ai-card"><h2><i class="codicon codicon-sparkle"></i>A richer tour, written by AI</h2>
+      <p>${esc(ai.label)} can read the important files and write a tour with the big picture, a diagram of how the parts connect, one feature followed end to end, and a <b>Simpler</b> and <b>Deeper</b> version of every stop. Every stop is checked against your code before the panda uses it.</p>
+      <p class="muted small">${plural(ai.files.length, "file", "files")} · about ${Math.round(ai.tokens / 1000)}k tokens${cost} (budget: ${esc(ai.budget)}). ${where}</p>
+      <details class="sent"><summary class="small">See what gets sent</summary><ul>${ai.files.map((f) => `<li><code>${esc(f)}</code></li>`).join("")}</ul></details>
+      ${ai.state === "error" ? `<p class="ai-error"><i class="codicon codicon-warning"></i> ${rich(ai.text || "Something went wrong.")}${ai.action ? ` <button class="small" id="aiFix">${ai.action === "setApiKey" ? "Add API key" : "Open settings"}</button>` : ""}</p>` : ""}
+      <div class="row">${working ? `<span class="ai-progress"><i class="codicon codicon-loading codicon-modifier-spin"></i> <span id="aiProgressText">${esc(ai.text || "Working…")}</span></span><button class="secondary" id="aiCancel">Cancel</button>` : `<button id="aiTour" ${ai.files.length ? "" : "disabled"}>${icon2("sparkle")}Write the tour with AI</button>`}</div>
+    </section>`;
+  }
+  const icon2 = (n) => `<i class="codicon codicon-${n}"></i>`;
+
+  /** Boxes in columns by how far they are from where things start, arrows between them. */
+  function archSvg(arch) {
+    const boxes = arch.boxes;
+    if (!boxes.length) return "";
+    const level = new Map(boxes.map((b) => [b.id, 0]));
+    for (let pass = 0; pass < boxes.length; pass++)
+      for (const a of arch.arrows) if (level.get(a.to) <= level.get(a.from) && pass < boxes.length - 1) level.set(a.to, level.get(a.from) + 1);
+    const cols = [];
+    for (const b of boxes) (cols[level.get(b.id)] ||= []).push(b);
+    const W = 150, H = 54, GX = 70, GY = 26;
+    const pos = new Map();
+    const rows = Math.max(...cols.map((c) => (c ? c.length : 0)));
+    cols.forEach((c, x) => (c || []).forEach((b, y) => pos.set(b.id, { x: 10 + x * (W + GX), y: 10 + (y + (rows - c.length) / 2) * (H + GY) })));
+    const width = 20 + cols.length * W + (cols.length - 1) * GX;
+    const height = 20 + rows * H + (rows - 1) * GY;
+    const arrows = arch.arrows
+      .map((a) => {
+        const f = pos.get(a.from), t = pos.get(a.to);
+        const forward = t.x > f.x;
+        const x1 = forward ? f.x + W : f.x + W / 2, y1 = forward ? f.y + H / 2 : f.y + H;
+        const x2 = forward ? t.x : t.x + W / 2, y2 = forward ? t.y + H / 2 : t.y;
+        const mx = (x1 + x2) / 2, my = (y1 + y2) / 2;
+        return `<path class="arch-link" d="M${x1},${y1} C${mx},${y1} ${mx},${y2} ${x2},${y2}" marker-end="url(#archHead)"/><text class="arch-label" x="${mx}" y="${my - 5}">${esc(a.label)}</text>`;
+      })
+      .join("");
+    const nodes = boxes
+      .map((b) => {
+        const p = pos.get(b.id);
+        const code = b.files.length > 0;
+        return `<g class="arch-box${code ? " code" : ""}" data-box="${esc(b.id)}" tabindex="${code ? 0 : -1}"><title>${esc(b.what)}${code ? "\n" + b.files.join("\n") : ""}</title><rect x="${p.x}" y="${p.y}" width="${W}" height="${H}" rx="8"/><text x="${p.x + W / 2}" y="${p.y + H / 2 - (code ? 4 : -4)}">${esc(b.label)}</text>${code ? `<text class="arch-files" x="${p.x + W / 2}" y="${p.y + H / 2 + 13}">${plural(b.files.length, "file", "files")}</text>` : ""}</g>`;
+      })
+      .join("");
+    return `<svg class="arch" viewBox="0 0 ${width} ${height}" role="img" aria-label="How the parts connect"><defs><marker id="archHead" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="arrow-head"/></marker></defs>${arrows}${nodes}</svg>`;
+  }
+
+  function overviewCards(ai) {
+    if (!ai) return "";
+    const o = ai.overview;
+    return (
+      `<section class="card"><h2><i class="codicon codicon-info"></i>The big picture</h2>${md(o.purpose)}${o.users ? `<p class="muted">${rich(o.users)}</p>` : ""}${o.howItWorks ? `<h3>How it works</h3>${md(o.howItWorks)}` : ""}</section>` +
+      (o.architecture.boxes.length ? `<section class="card"><h2><i class="codicon codicon-type-hierarchy"></i>How the parts connect</h2><div class="arch-wrap">${archSvg(o.architecture)}</div><p class="muted small">Click a part to walk to its code.</p></section>` : "") +
+      (o.glossary.length ? `<details class="card fold"><summary><i class="codicon codicon-book"></i>Words you'll see (${o.glossary.length})</summary><dl class="glossary">${o.glossary.map((g) => `<dt>${esc(g.term)}</dt><dd>${rich(g.meaning)}</dd>`).join("")}</dl></details>` : "")
+    );
+  }
+
   function fileRow(f, withReasons) {
     const reasons = withReasons && f.reasons.length ? `<span class="reasons">${f.reasons.map((r) => `<span class="reason">${esc(r)}</span>`).join("")}</span>` : "";
     return `<li><button class="file-row" data-explain="${esc(f.path)}" title="Have the panda explain ${esc(f.path)}"><code>${esc(f.path)}</code>${f.role ? `<span class="muted"> ${rich(f.role)}</span>` : ""}</button>${reasons}</li>`;
@@ -516,6 +590,7 @@
           .join("")}</ul></details>`
       : "";
     $("repoBody").innerHTML =
+      (isRepo ? aiCard(m.ai, tour) + overviewCards(tour.ai) : "") +
       (tour.message && !isRepo ? "" : outline) +
       (isRepo ? card("Start here", "debug-start", repo.start, true) + card("The files that do the work", "flame", repo.core, true) + folders + supporting + skip + quiz : "");
     show("repoView");
@@ -529,12 +604,28 @@
     const all = repoMsg.tour.chapters.flatMap((c) => c.stops.map((st) => ({ ...st, chapter: c.title })));
     const cur = all[stop];
     $("tourBar").hidden = !cur;
+    $("tourNow").hidden = !cur;
     $("repoPanda").src = `${sprites}/${cur ? "point" : "talk"}.svg`;
     if (!cur) return;
+    renderNow(cur, "note");
     $("tourWhere").innerHTML = `<b>Stop ${stop + 1} of ${all.length}</b> · ${esc(cur.chapter)} · <code>${esc(cur.path)}</code>`;
     $("tourBack").disabled = stop === 0;
     $("tourNext").innerHTML = stop + 1 < all.length ? `<i class="codicon codicon-arrow-right"></i>Next` : `<i class="codicon codicon-check"></i>Finish`;
     document.querySelector("#repoBody .stop.here")?.scrollIntoView({ block: "nearest" });
+  }
+
+  /** The current stop's explanation, with Simpler / Deeper and a question to check yourself. */
+  function renderNow(cur, which) {
+    const versions = [["note", "Explanation"], ["simpler", "Simpler"], ["deeper", "Deeper"]].filter(([k]) => cur[k]);
+    $("tourNow").innerHTML =
+      `<div class="now-head"><b>${esc(cur.title)}</b><span class="muted small"> ${esc(cur.path)}:${cur.line + 1}</span>${versions.length > 1 ? `<span class="segmented small" role="tablist">${versions.map(([k, label]) => `<button role="tab" data-now="${k}" class="${k === which ? "on" : ""}" aria-selected="${k === which}">${label}</button>`).join("")}</span>` : ""}</div>` +
+      `<div class="now-text">${md(cur[which])}</div>` +
+      (cur.check ? `<div class="now-check"><b>Check yourself:</b> ${rich(cur.check.question)} <button class="link" data-reveal>Show answer</button><p class="muted" hidden>${rich(cur.check.answer)}</p></div>` : "");
+    $("tourNow").querySelectorAll("[data-now]").forEach((b) => b.addEventListener("click", () => renderNow(cur, b.dataset.now)));
+    $("tourNow").querySelector("[data-reveal]")?.addEventListener("click", (e) => {
+      e.target.nextElementSibling.hidden = false;
+      e.target.remove();
+    });
   }
 
   $("tourStart").addEventListener("click", () => vscode.postMessage({ type: "tourStart" }));
@@ -545,6 +636,18 @@
   $("repoMapBack").addEventListener("click", () => vscode.postMessage({ type: "repoMap" }));
   document.querySelectorAll("[data-level]").forEach((b) => b.addEventListener("click", () => vscode.postMessage({ type: "tourLevel", level: b.dataset.level })));
   $("repoBody").addEventListener("click", (e) => {
+    if (e.target.closest("#aiTour")) return vscode.postMessage({ type: "aiTour" });
+    if (e.target.closest("#aiCancel")) return vscode.postMessage({ type: "aiCancel" });
+    if (e.target.closest("#aiBasic")) return vscode.postMessage({ type: "aiBasic" });
+    if (e.target.closest("#aiFix")) return vscode.postMessage({ type: "fix", action: repoMsg?.ai?.action });
+    const box = e.target.closest("[data-box]");
+    if (box && repoMsg?.tour.ai) {
+      const files = repoMsg.tour.ai.overview.architecture.boxes.find((b) => b.id === box.dataset.box)?.files ?? [];
+      const st = repoMsg.tour.chapters.flatMap((c) => c.stops).find((s) => files.includes(s.path));
+      if (st) return vscode.postMessage({ type: "tourJump", stop: st.index });
+      if (files[0]) return vscode.postMessage({ type: "explainPath", path: files[0] });
+      return;
+    }
     const stop = e.target.closest("[data-stop]");
     if (stop) return vscode.postMessage({ type: "tourJump", stop: Number(stop.dataset.stop) });
     const explain = e.target.closest("[data-explain]");
@@ -583,6 +686,9 @@
         break;
       case "tourAt":
         tourAt(m.stop);
+        break;
+      case "aiProgress":
+        if ($("aiProgressText")) $("aiProgressText").textContent = m.text;
         break;
       case "lessonState":
         lessonState = { done: m.done, passed: m.passed, ladder: m.ladder };

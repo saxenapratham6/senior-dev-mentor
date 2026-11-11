@@ -30,6 +30,15 @@ import {
 } from "./summary";
 
 export const SECRET_KEY = "seniorDevMentor.anthropicApiKey";
+
+export interface AiSetup {
+  kind: "anthropic" | "ollama";
+  model: string;
+  ready: boolean;
+  label: string;
+  guard: ReturnType<MentorViewProvider["guardOptionsPublic"]>;
+  provider: () => Promise<MentorProvider>;
+}
 const ROADMAP_KEY = "seniorDevMentor.roadmap";
 const MAX_TURNS = 12;
 
@@ -226,10 +235,23 @@ export class MentorViewProvider implements vscode.WebviewViewProvider {
     });
   }
 
+  guardOptionsPublic() {
+    return this.guardOptions();
+  }
+
   private guardOptions() {
     const n = vscode.workspace.getConfiguration("seniorDevMentor").get<number>("maxCodeLines", DEFAULT_GUARD.maxCodeLines);
     const maxCodeLines = Math.max(0, Math.min(8, Math.floor(n)));
     return { ...DEFAULT_GUARD, maxCodeLines, maxCodeChars: Math.max(40, maxCodeLines * 40) };
+  }
+
+  /** The model the repo tour should use, and whether it's ready (Claude needs a key). */
+  async aiSetup(): Promise<AiSetup> {
+    const cfg = vscode.workspace.getConfiguration("seniorDevMentor");
+    const kind = cfg.get<string>("provider") === "ollama" ? "ollama" : "anthropic";
+    const model = kind === "ollama" ? cfg.get<string>("ollamaModel", "llama3.2") : cfg.get<string>("anthropicModel", "claude-opus-5-5");
+    const ready = kind === "ollama" || !!(await this.ctx.secrets.get(SECRET_KEY)) || !!process.env.ANTHROPIC_API_KEY;
+    return { kind, model, ready, label: kind === "ollama" ? `Ollama (${model}) on this computer` : `Claude (${model})`, guard: this.guardOptions(), provider: () => this.provider() };
   }
 
   private async provider(): Promise<MentorProvider> {

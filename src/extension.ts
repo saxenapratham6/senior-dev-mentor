@@ -22,6 +22,7 @@ export function activate(context: vscode.ExtensionContext): { panda: EditorPanda
   mentor = new MentorViewProvider(context, progress, panda);
   guide = new RepoGuide(context, panda, mentor.board);
   mentor.repoActions = (a) => void guide.onAction(a);
+  guide.aiSetup = () => mentor.aiSetup();
   context.subscriptions.push(panda, guide);
 
   context.subscriptions.push(

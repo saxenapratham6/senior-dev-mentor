@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { ChatTurn, MentorProvider, ProviderError } from "./types";
+import { ChatTurn, JsonOptions, MentorProvider, ProviderError } from "./types";
 
 // Free, offline option for students without an API key: a local Ollama server.
 export class OllamaProvider implements MentorProvider {
@@ -56,7 +56,7 @@ export class OllamaProvider implements MentorProvider {
     return res;
   }
 
-  async json(system: string, user: string, schema: z.ZodType, signal: AbortSignal): Promise<unknown> {
+  async json(system: string, user: string, schema: z.ZodType, signal: AbortSignal, opts: JsonOptions = {}): Promise<unknown> {
     const res = await this.post(
       {
         model: this.model,
@@ -74,7 +74,7 @@ export class OllamaProvider implements MentorProvider {
     try {
       return JSON.parse(body.message?.content ?? "");
     } catch {
-      throw new ProviderError("The local model's visualization wasn't valid JSON. Try again, or use a bigger model.");
+      throw new ProviderError(`The local model's ${opts.what ?? "visualization"} wasn't valid JSON. Try again, or use a bigger model.`);
     }
   }
 }

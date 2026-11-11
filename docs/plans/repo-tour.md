@@ -1,6 +1,6 @@
 # Plan: Repo Tour and Deploy Check
 
-Status: **0.8 (repo map and no-AI tour) is built.** 0.9 to 1.1 are next. Target: versions 0.8 to 1.1.
+Status: **0.8 (repo map and no-AI tour) and 0.9 (AI-written tour) are built.** 1.0 and 1.1 are next. Target: versions 0.8 to 1.1.
 
 ## 1. What we're building
 

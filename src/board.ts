@@ -31,8 +31,24 @@ export type BoardMessage =
   | { type: "runResult"; exampleId: string; result: RunResult & { saved?: boolean } }
   | { type: "checkResult"; exerciseId: string; result: CheckResult }
   | { type: "lessonState"; done: boolean; passed: string[]; ladder: string[] }
-  | { type: "repo"; repo: RepoView; tour: TourView; level: "new" | "experienced"; at: number; resumeAt?: number }
-  | { type: "tourAt"; stop: number };
+  | { type: "repo"; repo: RepoView; tour: TourView; level: "new" | "experienced"; at: number; resumeAt?: number; ai?: AiPanel }
+  | { type: "tourAt"; stop: number }
+  | { type: "aiProgress"; text: string };
+
+/** The "write it with AI" card: what would be sent, to whom, and roughly what it costs. */
+export interface AiPanel {
+  kind: "anthropic" | "ollama";
+  label: string;
+  ready: boolean;
+  files: string[];
+  tokens: number;
+  cost?: number;
+  budget: string;
+  state: "idle" | "working" | "error";
+  text?: string;
+  action?: "setApiKey" | "openSettings";
+  written: boolean; // the tour on the board was written by AI
+}
 
 export interface RepoFileRow {
   path: string;
@@ -65,8 +81,24 @@ export interface TourView {
   title: string;
   kind: "repo" | "folder" | "file";
   message?: string;
-  chapters: { title: string; why: string; stops: { index: number; title: string; path: string; line: number; bubble: string }[] }[];
+  chapters: {
+    title: string;
+    why: string;
+    stops: { index: number; title: string; path: string; line: number; bubble: string; note: string; simpler?: string; deeper?: string; check?: { question: string; answer: string } }[];
+  }[];
   quiz: { q: string; a: string }[];
+  ai?: {
+    label: string;
+    files: number;
+    checked: { kept: number; moved: number; dropped: number };
+    overview: {
+      purpose: string;
+      users: string;
+      howItWorks: string;
+      architecture: { boxes: { id: string; label: string; what: string; files: string[] }[]; arrows: { from: string; to: string; label: string }[] };
+      glossary: { term: string; meaning: string }[];
+    };
+  };
 }
 
 /** Everything the repo map can ask for. */
@@ -80,9 +112,12 @@ export type RepoAction =
   | { type: "tourLevel"; level: "new" | "experienced" }
   | { type: "explainPath"; path: string }
   | { type: "openFile"; path: string; line?: number }
-  | { type: "repoMap" };
+  | { type: "repoMap" }
+  | { type: "aiTour" }
+  | { type: "aiCancel" }
+  | { type: "aiBasic" };
 
-const REPO_ACTIONS = new Set(["tourStart", "tourResume", "tourJump", "tourNext", "tourBack", "tourEnd", "tourLevel", "explainPath", "openFile", "repoMap"]);
+const REPO_ACTIONS = new Set(["tourStart", "tourResume", "tourJump", "tourNext", "tourBack", "tourEnd", "tourLevel", "explainPath", "openFile", "repoMap", "aiTour", "aiCancel", "aiBasic"]);
 
 /** Everything the lesson view can ask for. */
 export type LessonAction =
@@ -350,6 +385,7 @@ function boardHtml(webview: vscode.Webview, media: vscode.Uri): string {
         <button id="tourEnd" class="secondary" title="End the tour">${icon("close")}</button>
       </span>
     </div>
+    <section id="tourNow" class="card tour-now" hidden aria-live="polite"></section>
     <div id="repoBody" class="repo-body"></div>
   </section>
 

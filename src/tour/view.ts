@@ -35,7 +35,12 @@ export function tourView(tour: Tour): TourView {
     title: tour.title,
     kind: tour.kind,
     message: tour.message,
-    chapters: tour.chapters.map((c) => ({ title: c.title, why: c.why, stops: c.stops.map((s) => ({ index: i++, title: s.title, path: s.path, line: s.line, bubble: s.bubble })) })),
+    chapters: tour.chapters.map((c) => ({
+      title: c.title,
+      why: c.why,
+      stops: c.stops.map((s) => ({ index: i++, title: s.title, path: s.path, line: s.line, bubble: s.bubble, note: s.note, simpler: s.simpler, deeper: s.deeper, check: s.check })),
+    })),
     quiz: tour.quiz,
+    ai: tour.ai,
   };
 }

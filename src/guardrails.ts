@@ -213,3 +213,25 @@ export function parseConcepts(list: string): string[] {
     .filter((c) => c && c.length <= 40)
     .slice(0, 5);
 }
+
+// ---------------------------------------------------------------------------
+// The "explain existing code" profile, for repo tours. A tour may quote the
+// repo's own code at any length, because the student didn't write it and it
+// already exists; anything else still goes through the normal limits. A code
+// block counts as quoted only if, ignoring whitespace, it appears in the files.
+
+const squash = (s: string) => s.replace(/\s+/g, " ").trim();
+
+export function guardExplanation(text: string, repoTexts: string[], opts: GuardOptions = DEFAULT_GUARD): { text: string; stats: GuardStats } {
+  const corpus = repoTexts.map(squash);
+  const fromRepo = (code: string) => {
+    const c = squash(code);
+    return c.length > 0 && corpus.some((t) => t.includes(c));
+  };
+  const kept: string[] = [];
+  const hold = (s: string) => `⟦REPO${kept.push(s) - 1}⟧`;
+  let masked = text.replace(/(^|\n)(```|~~~)[^\n]*\n([\s\S]*?)\n\2[ \t]*(?=\n|$)/g, (whole, lead: string, _f, body: string) => (fromRepo(body) ? lead + hold(whole.slice(lead.length)) : whole));
+  masked = masked.replace(/`([^`\n]{61,})`/g, (whole, inner: string) => (fromRepo(inner) ? hold(whole) : whole));
+  const guarded = guardText(masked, opts);
+  return { text: guarded.text.replace(/⟦REPO(\d+)⟧/g, (_m, i: string) => kept[Number(i)]).replace(/\n$/, text.endsWith("\n") ? "\n" : ""), stats: guarded.stats };
+}

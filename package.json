@@ -2,7 +2,7 @@
   "name": "senior-dev-mentor",
   "displayName": "Senior Dev Mentor",
   "description": "An open-source AI mentor that teaches you to code instead of coding for you. A panda lives in your editor, walks you through any repo file by file, points at the lines worth a look, draws data structures on its board, and wraps up what you learned.",
-  "version": "0.8.0",
+  "version": "0.9.0",
   "publisher": "senior-dev-mentor",
   "license": "MIT",
   "repository": {
@@ -275,6 +275,21 @@
           "type": "boolean",
           "default": true,
           "description": "The repo tour ranks recently changed files a little higher, using `git log` (read only)."
+        },
+        "seniorDevMentor.tourBudget": {
+          "type": "string",
+          "enum": [
+            "small",
+            "medium",
+            "large"
+          ],
+          "enumDescriptions": [
+            "About 25,000 tokens: the most important files only.",
+            "About 60,000 tokens: the usual choice.",
+            "About 150,000 tokens: big repos, more files read."
+          ],
+          "default": "medium",
+          "description": "How much code the AI repo tour may read. The board shows the estimate before anything is sent. List paths in a .mentorignore file (gitignore syntax) to never send them."
         }
       }
     }

@@ -225,6 +225,63 @@ exports.run = async function () {
     api.board.dispose();
   });
 
+  // ---------------------------------------------------------------- the AI tour (a stub model, no network)
+  const prompts = [];
+  const stub = {
+    label: "Stub model",
+    async *stream() {},
+    async json(system, user) {
+      prompts.push(system + user);
+      if (/For each excerpt/.test(system)) {
+        const files = [...user.matchAll(/^=== (\S+) /gm)].map((m) => m[1]);
+        return { files: files.map((p) => ({ path: p, purpose: `About ${p}.`, parts: [], notable: [] })) };
+      }
+      if (/architecture: 3 to 7 boxes/.test(system))
+        return { purpose: "A notes API.", users: "Apps.", howItWorks: "server.js starts app.js.", architecture: { boxes: [{ id: "api", label: "API", what: "Requests.", files: ["src/app.js"] }], arrows: [] }, glossary: [] };
+      const stop = (path, line, anchor) => ({ path, line, anchor, bubble: "Look here.", explain: "Explained.", simpler: "Simply.", deeper: "Deeply.", checkQuestion: "Why?", checkAnswer: "Because." });
+      return {
+        chapters: [
+          { title: "Start", why: "", stops: [stop("src/server.js", 4, "app.listen(port"), stop("src/app.js", 6, "express.json()"), stop("src/invented.js", 1, "nothing")] },
+          { title: "Routes", why: "", stops: [stop("src/routes/notes.js", 1, "router.post(\"/\"")] },
+        ],
+      };
+    },
+  };
+  let ready = true;
+  guide.aiSetup = async () => ({ kind: "anthropic", model: "stub", ready, label: "Stub model", guard: { maxCodeLines: 3, maxCodeChars: 120, maxInlineChars: 60 }, provider: async () => stub });
+
+  await check("without an API key, the AI tour asks for one and sends nothing", async () => {
+    ready = false;
+    await vscode.commands.executeCommand("seniorDevMentor.tour");
+    await guide.onAction({ type: "aiTour" });
+    assert.equal(prompts.length, 0);
+    assert.equal(guide.currentTour.ai, undefined);
+    ready = true;
+  });
+
+  await check("the AI tour is written, checked against the code, and walked", async () => {
+    await guide.onAction({ type: "aiTour" });
+    const t = guide.currentTour;
+    assert.ok(t.ai, "AI-written");
+    const stops = t.chapters.flatMap((c) => c.stops);
+    assert.deepEqual(stops.map((s) => s.path), ["src/server.js", "src/app.js", "src/routes/notes.js"], "the invented file was dropped");
+    assert.equal(stops[2].line + 1, 11, "moved to the line its anchor is on");
+    assert.equal(t.ai.checked.dropped, 1);
+    assert.ok(await until(() => panda.active && guide.stop === 0), "the panda walks it");
+    assert.ok(!prompts.join("").includes("fixture-not-real"), ".env never sent");
+    await guide.onAction({ type: "tourEnd" });
+  });
+
+  await check("an AI tour written before is reused without asking the model again", async () => {
+    const before = prompts.length;
+    await guide.onAction({ type: "aiBasic" });
+    assert.equal(guide.currentTour.ai, undefined);
+    await vscode.commands.executeCommand("seniorDevMentor.tour");
+    assert.ok(guide.currentTour.ai, "came back from the saved copy");
+    assert.equal(prompts.length, before, "no new model calls");
+    api.board.dispose();
+  });
+
   console.log("\n" + results.join("\n") + "\n");
   if (results.some((r) => r.startsWith("FAIL"))) throw new Error("integration checks failed");
 };

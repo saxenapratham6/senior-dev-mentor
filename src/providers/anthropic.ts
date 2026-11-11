@@ -1,7 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import type { z } from "zod";
-import { ChatTurn, MentorProvider, ProviderError } from "./types";
+import { ChatTurn, JsonOptions, MentorProvider, ProviderError } from "./types";
 
 // Models that accept the server-side refusal fallback ("default" routing).
 const FALLBACK_MODELS = new Set(["claude-fable-5-1", "claude-opus-5-5", "claude-opus-5", "claude-sonnet-5-5"]);
@@ -50,22 +50,25 @@ export class AnthropicProvider implements MentorProvider {
     }
   }
 
-  async json(system: string, user: string, schema: z.ZodType, signal: AbortSignal): Promise<unknown> {
+  async json(system: string, user: string, schema: z.ZodType, signal: AbortSignal, opts: JsonOptions = {}): Promise<unknown> {
+    const what = opts.what ?? "visualization";
     try {
       const response = await this.client.messages.parse(
         {
           model: this.model,
           max_tokens: 16000,
           thinking: { type: "adaptive" },
-          output_config: { effort: this.effort, format: zodOutputFormat(schema) },
-          system,
+          output_config: { effort: opts.effort ?? this.effort, format: zodOutputFormat(schema) },
+          // A system prompt shared by several calls (like the repo index in a tour) is cached, so
+          // the later calls read it at a tenth of the price.
+          system: opts.cacheSystem ? [{ type: "text", text: system, cache_control: { type: "ephemeral" } }] : system,
           messages: [{ role: "user", content: user }],
         },
         { signal },
       );
-      if (response.stop_reason === "refusal") throw new ProviderError("Claude declined to draw that one. Try describing it differently.");
-      if (response.stop_reason === "max_tokens") throw new ProviderError("That visualization got too big. Try something smaller, like fewer elements.");
-      if (response.parsed_output == null) throw new ProviderError("Claude's visualization didn't come back in the expected shape. Try again.");
+      if (response.stop_reason === "refusal") throw new ProviderError(`Claude declined to write that ${what}. Try again, or describe it differently.`);
+      if (response.stop_reason === "max_tokens") throw new ProviderError(`That ${what} got too big. Try something smaller.`);
+      if (response.parsed_output == null) throw new ProviderError(`Claude's ${what} didn't come back in the expected shape. Try again.`);
       return response.parsed_output;
     } catch (err) {
       if (err instanceof ProviderError) throw err;
