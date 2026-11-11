@@ -7,6 +7,10 @@ import path from "node:path";
 import { loadLessons } from "../src/lessons/index";
 import { buildRoadmap, PROBLEM_MILESTONES, emptyRoadmapState, toggleItem, toggleLadder, markPassed, roadmapProgress, leetcodeUrl } from "../src/roadmap";
 import { UNITS } from "../src/lessons/types";
+import { walkRepo } from "../src/repo/walk";
+import { buildIndex } from "../src/repo/index";
+import { buildRepoTour, flatStops } from "../src/tour/tour";
+import { repoView, tourView } from "../src/tour/view";
 
 const root = path.join(__dirname, "..");
 const src = readFileSync(path.join(root, "src/board.ts"), "utf8");
@@ -47,12 +51,17 @@ const mock = `<script>
 const ROADMAP = ${JSON.stringify(roadmapMsg)};
 const LESSONS = ${JSON.stringify(lessonMsgs)};
 const OUTPUTS = ${JSON.stringify(outputs)};
+const REPO = __REPO__;
 window.acquireVsCodeApi = () => ({
   postMessage(m) {
     console.log("to extension", m);
     const reply = (x) => window.postMessage(x, "*");
-    const want = new URLSearchParams(location.search).get("lesson");
-    if (m.type === "ready") reply(want ? LESSONS[want] : ROADMAP);
+    const params = new URLSearchParams(location.search);
+    const want = params.get("lesson");
+    if (m.type === "ready") reply(params.has("repo") ? { ...REPO, at: Number(params.get("at") ?? -1) } : want ? LESSONS[want] : ROADMAP);
+    if (m.type === "tourStart") reply({ type: "tourAt", stop: 0 });
+    if (m.type === "tourJump") reply({ type: "tourAt", stop: m.stop });
+    if (m.type === "tourEnd") reply({ type: "tourAt", stop: -1 });
     if (m.type === "openLesson") reply(LESSONS[m.id]);
     if (m.type === "backToRoadmap") reply(ROADMAP);
     if (m.type === "runExample") setTimeout(() => reply({ type: "runResult", exampleId: m.id, result: OUTPUTS[m.id] }), 250);
@@ -61,8 +70,16 @@ window.acquireVsCodeApi = () => ({
 });
 </script>`;
 const theme = readFileSync(path.join(__dirname, "preview.mjs"), "utf8").match(/const theme = `([\s\S]*?)`;/)![1].replace(/body \{[^}]*\}/, "");
-writeFileSync(
+(async () => {
+  // The repo map shows the fixture named by REPO_FIXTURE (default flask-todo), or a folder path.
+  const target = process.env.REPO_FIXTURE ?? "flask-todo";
+  const dir = target.includes("/") ? path.resolve(target) : path.join(root, "test/fixtures/repos", target);
+  const index = buildIndex((await walkRepo(dir)).files, { rootName: path.basename(dir) });
+  const tour = buildRepoTour(index, "new");
+  const repoMsg = { type: "repo", repo: repoView(index), tour: tourView(tour), level: "new", at: -1, resumeAt: flatStops(tour).length > 3 ? 2 : undefined };
+  writeFileSync(
   path.join(__dirname, "board-preview.html"),
-  `<!DOCTYPE html><html><head><meta charset="utf-8"><link rel="stylesheet" href="../media/codicons/codicon.css"><link rel="stylesheet" href="../media/board.css"><style>${theme} body{background:#1f1f1f}</style>${mock}</head><body data-sprites="../media/panda">${html}</body></html>`,
+  `<!DOCTYPE html><html><head><meta charset="utf-8"><link rel="stylesheet" href="../media/codicons/codicon.css"><link rel="stylesheet" href="../media/board.css"><style>${theme} body{background:#1f1f1f}</style>${mock.replace("__REPO__", JSON.stringify(repoMsg).replace(/</g, "\\u003c"))}</head><body data-sprites="../media/panda">${html}</body></html>`,
 );
-console.log("Wrote dev/board-preview.html");
+  console.log("Wrote dev/board-preview.html");
+})();

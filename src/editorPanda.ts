@@ -13,13 +13,30 @@ import { placePanda, pandaCss, bubbleCss } from "./pandaPlacement";
 export interface PandaStop {
   line: number; // 0-based
   note: string; // Markdown, already guarded
+  /** Another file to walk to. Without it, the stop is in the tour's file. */
+  uri?: vscode.Uri;
+  /** What the speech bubble says; by default, the note's first sentence. */
+  bubble?: string;
 }
 
 export interface PandaWhereabouts {
   fileName: string;
+  uri: string;
   line: number; // 1-based
-  stop: number;
+  stop: number; // 1-based
   stops: number;
+  /** Which tour this is, as passed to tour(). */
+  tag?: string;
+}
+
+export interface TourOptions {
+  reveal: boolean;
+  viewColumn?: vscode.ViewColumn;
+  /** Most stops to keep (default 8). */
+  max?: number;
+  tag?: string;
+  /** Start at this stop instead of the first (for resuming). */
+  startAt?: number;
 }
 
 type Pose = "sit" | "walk1" | "walk2" | "sleep" | "think" | "talk" | "point" | "cheer";
@@ -47,6 +64,8 @@ export class EditorPanda implements vscode.Disposable {
   private stops: PandaStop[] = [];
   private index = 0;
   private touring = false;
+  private tourOpts: TourOptions = { reveal: true };
+  private switching = false; // opening the next stop's file
   private walkToken = 0;
   private followTimer?: NodeJS.Timeout;
   private sleepTimer?: NodeJS.Timeout;
@@ -156,24 +175,54 @@ export class EditorPanda implements vscode.Disposable {
    * With `reveal: false` the panda only goes if the line is already on screen,
    * so it never scrolls the editor out from under someone who is typing.
    */
-  async tour(uri: vscode.Uri, stops: PandaStop[], opts: { reveal: boolean; viewColumn?: vscode.ViewColumn }): Promise<boolean> {
+  async tour(uri: vscode.Uri, stops: PandaStop[], opts: TourOptions): Promise<boolean> {
     if (!stops.length || !this.enabled) return false;
-    const editor = await this.editorFor(uri, opts.reveal, opts.viewColumn);
+    stops = stops.slice(0, opts.max ?? 8);
+    const first = Math.max(0, Math.min(opts.startAt ?? 0, stops.length - 1));
+    this.switching = true;
+    let editor: vscode.TextEditor | undefined;
+    try {
+      editor = await this.editorFor(stops[first].uri ?? uri, opts.reveal, opts.viewColumn, opts.tag !== undefined);
+    } finally {
+      this.switching = false;
+    }
     if (!editor) return false;
-    const target = Math.min(stops[0].line, editor.document.lineCount - 1);
+    const target = Math.min(stops[first].line, editor.document.lineCount - 1);
     if (!opts.reveal && !isVisible(editor, target)) return false;
+    if (this.touring) this.endTour(true); // a new tour replaces the old one
     this.hidden = false;
+    if (editor !== this.editor) this.line = undefined; // walk in from the top of the new file
     this.adopt(editor);
-    this.stops = stops.slice(0, 8);
-    this.index = 0;
+    this.stops = stops.map((s) => ({ ...s, uri: s.uri ?? uri }));
+    this.tourOpts = opts;
+    this.index = first;
     this.touring = true;
-    await this.goToStop(0, opts.reveal);
+    await this.goToStop(first, opts.reveal);
     return true;
   }
 
   async next(): Promise<void> {
     if (!this.touring || this.index + 1 >= this.stops.length || !this.editor) return this.dismiss();
     await this.goToStop(this.index + 1, true);
+  }
+
+  async back(): Promise<void> {
+    if (!this.touring || this.index === 0) return;
+    await this.goToStop(this.index - 1, true);
+  }
+
+  /** Jump to any stop of the current tour. */
+  async goTo(index: number): Promise<void> {
+    if (!this.touring || index < 0 || index >= this.stops.length) return;
+    await this.goToStop(index, true);
+  }
+
+  get stopIndex(): number | undefined {
+    return this.touring ? this.index : undefined;
+  }
+
+  get tourTag(): string | undefined {
+    return this.touring ? this.tourOpts.tag : undefined;
   }
 
   dismiss(): void {
@@ -194,8 +243,25 @@ export class EditorPanda implements vscode.Disposable {
   // -------------------------------------------------------------- walking
 
   private async goToStop(index: number, reveal: boolean): Promise<void> {
-    const editor = this.editor!;
     const stop = this.stops[index];
+    let editor = this.editor!;
+    if (stop.uri && stop.uri.toString() !== editor.document.uri.toString()) {
+      // The next stop is in another file: open it and walk in from the top.
+      this.walkToken++;
+      editor.setDecorations(this.overlay, []);
+      editor.setDecorations(this.spot, []);
+      this.switching = true;
+      let next: vscode.TextEditor | undefined;
+      try {
+        next = await this.editorFor(stop.uri, true, this.tourOpts.viewColumn ?? editor.viewColumn, this.tourOpts.tag !== undefined);
+      } finally {
+        this.switching = false;
+      }
+      if (!next) return this.endTour(true);
+      this.adopt(next);
+      this.line = undefined;
+      editor = next;
+    }
     const target = Math.max(0, Math.min(stop.line, editor.document.lineCount - 1));
     this.index = index;
     this.bubble = undefined;
@@ -206,10 +272,10 @@ export class EditorPanda implements vscode.Disposable {
     }
     if (!(await this.walkTo(target))) return;
     this.pose = "talk";
-    this.bubble = clip(plain(stop.note, 150), 160) + (this.stops.length > 1 ? `  (${index + 1}/${this.stops.length}, hover the line)` : "  (hover the line)");
+    this.bubble = clip(stop.bubble ?? plain(stop.note, 150), 160) + (this.stops.length > 1 ? `  (${index + 1}/${this.stops.length}, hover the line)` : "  (hover the line)");
     this.draw();
     this.showSpot(target);
-    this.onMove({ fileName: path.basename(editor.document.fileName), line: target + 1, stop: index + 1, stops: this.stops.length });
+    this.onMove({ fileName: path.basename(editor.document.fileName), uri: editor.document.uri.toString(), line: target + 1, stop: index + 1, stops: this.stops.length, tag: this.tourOpts.tag });
   }
 
   /** Walk line by line. Returns false if a newer walk took over. */
@@ -255,11 +321,12 @@ export class EditorPanda implements vscode.Disposable {
     const stop = this.stops[this.index];
     const more = this.index + 1 < this.stops.length;
     const hover = new vscode.MarkdownString(undefined, true);
-    hover.isTrusted = { enabledCommands: ["seniorDevMentor.pandaAsk", "seniorDevMentor.pandaNext", "seniorDevMentor.pandaDismiss"] };
+    hover.isTrusted = { enabledCommands: ["seniorDevMentor.pandaAsk", "seniorDevMentor.pandaNext", "seniorDevMentor.pandaBack", "seniorDevMentor.pandaDismiss"] };
     hover.appendMarkdown(`$(lightbulb) **Mentor** · line ${line + 1}${this.stops.length > 1 ? ` · stop ${this.index + 1} of ${this.stops.length}` : ""}\n\n`);
     hover.appendMarkdown(`${stop.note}\n\n---\n\n`);
     hover.appendMarkdown(`[$(comment-discussion) Explain more](command:seniorDevMentor.pandaAsk "Ask the mentor about this line")`);
-    if (more) hover.appendMarkdown(` · [$(arrow-down) Next stop](command:seniorDevMentor.pandaNext "Walk to the next line")`);
+    if (this.index > 0) hover.appendMarkdown(` · [$(arrow-left) Back](command:seniorDevMentor.pandaBack "Walk back to the previous stop")`);
+    if (more) hover.appendMarkdown(` · [$(arrow-right) Next stop](command:seniorDevMentor.pandaNext "Walk to the next stop")`);
     hover.appendMarkdown(` · [$(check) Got it](command:seniorDevMentor.pandaDismiss "Thanks, panda")`);
     editor.setDecorations(this.spot, [{ range: editor.document.lineAt(line).range, hoverMessage: hover }]);
   }
@@ -268,7 +335,9 @@ export class EditorPanda implements vscode.Disposable {
 
   private onEditor(editor: vscode.TextEditor | undefined): void {
     if (!editor || !this.enabled || editor.document.uri.scheme === "output") return;
-    if (editor === this.editor) return;
+    if (editor === this.editor || this.switching) return;
+    // The panda opening the next stop's file isn't you leaving the tour.
+    if (this.touring && this.stops[this.index]?.uri?.toString() === editor.document.uri.toString()) return;
     if (this.touring) this.endTour(true);
     this.adopt(editor);
     this.line = editor.selection.active.line;
@@ -363,11 +432,12 @@ export class EditorPanda implements vscode.Disposable {
     }
   }
 
-  private async editorFor(uri: vscode.Uri, open: boolean, viewColumn?: vscode.ViewColumn): Promise<vscode.TextEditor | undefined> {
-    const visible = vscode.window.visibleTextEditors.find((e) => e.document.uri.toString() === uri.toString());
+  private async editorFor(uri: vscode.Uri, open: boolean, viewColumn?: vscode.ViewColumn, preview = false): Promise<vscode.TextEditor | undefined> {
+    const visible = vscode.window.visibleTextEditors.find((e) => e.document.uri.toString() === uri.toString() && (viewColumn === undefined || e.viewColumn === viewColumn));
     if (visible || !open) return visible;
     try {
-      return await vscode.window.showTextDocument(uri, { viewColumn, preserveFocus: true, preview: false });
+      // Tours open files as preview tabs, so a long tour doesn't leave a row of tabs behind.
+      return await vscode.window.showTextDocument(uri, { viewColumn, preserveFocus: !preview, preview });
     } catch {
       return undefined;
     }

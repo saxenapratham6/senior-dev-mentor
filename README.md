@@ -13,6 +13,7 @@ A panda lives in your code editor, and the sidebar is just a conversation.
 | | |
 |---|---|
 | **The panda in your editor** | It sits beside the line you're working on and strolls over when you pause, thinks while the mentor works, and naps when you're idle. After a review, hint or error explanation it walks line by line to each spot worth a look and says a short question in a speech bubble. Hover the line for the full explanation, **Explain more**, **Next stop** or **Got it**. Edit the line and it moves on. |
+| **Repo tour** | Opened a project you've never seen? Press the compass and the panda shows you around it, the way a senior engineer onboards a new teammate. The board shows the map: what the project is, where the program starts, the files that do the work (with the reasons, like "imported by 6 files" or "handles 3 web addresses"), what each folder is for, and what's safe to skip. Then the panda walks you through it file by file, line by line, from the entry point to the core files to how it's set up and tested. Choose **New to this** (every term explained the first time) or **Experienced** (short and dense). Right-click any file or folder and choose **Explain with the Mentor** for a shorter walk through just that part. It needs no AI: everything comes from reading the code, so it's fast, free and works offline. Files that may hold secrets, like `.env`, are never opened. |
 | **Plan** | Describe your approach *before* writing code; the mentor points out gaps and edge cases. |
 | **Hint** | Three levels: a nudge (one question), then the concept, then a plain-English plan. Each level unlocks only after you change your code or write down what you tried. There is no fourth level with the answer. |
 | **Review** | One thing you did well, then questions that lead you to the bugs. No fixes. |
@@ -74,6 +75,10 @@ The limits are unit-tested (`npm test`). In a live test, a small local model ign
 | `seniorDevMentor.nudgeOnSave` | `true` | Panda questions on save |
 | `seniorDevMentor.mascot` | `true` | Show the panda in your editor |
 | `seniorDevMentor.pandaFollowsCursor` | `true` | The panda strolls to your line when you pause |
+| `seniorDevMentor.tourLevel` | `new` | Repo tour: `new` explains every term; `experienced` is short |
+| `seniorDevMentor.offerTourOnOpen` | `true` | The panda offers a tour once in a new project with 20+ code files |
+| `seniorDevMentor.tourMaxFiles` | `20000` | The repo tour stops listing files after this many |
+| `seniorDevMentor.useGitHistory` | `true` | Rank recently changed files a little higher (`git log`, read only) |
 | `seniorDevMentor.pythonPath` | `""` | Python for running lesson examples and checking exercises (default `python3`, or `python` on Windows) |
 
 ## Icons
@@ -88,6 +93,7 @@ npm run lessons   # re-run every lesson example and save its output
 npm test          # guardrails, hint ladder, lessons, exercises, scenes, roadmap
 npm run build     # bundles to dist/extension.js
 npm run test:vscode   # editor-panda checks inside a real VS Code (uses your installed copy)
+npx tsx dev/tour-repo.ts <folder>   # print the repo tour the panda would give for any folder
 ```
 
 Press **F5** in VS Code to launch an Extension Development Host. To work on the sidebar UI in a normal browser with a fake mentor, run `node dev/preview.mjs` and serve the project folder (for example `python3 -m http.server`), then open `/dev/preview.html`.
@@ -101,6 +107,9 @@ src/
   summary.ts        the wrap-up: session log, schema, notes export
   roadmap.ts        the study roadmap and its progress (pure, tested)
   classroom.ts      lessons at runtime: run examples, create and check practice files
+  repoGuide.ts      the repo tour: reads the workspace, shows the map, sends the panda file to file
+  repo/             reading a repo without AI: files, manifests, imports, entry points, routes, ranking
+  tour/             the tour itself (chapters and stops at two levels) and what the board shows
   lessons/          lesson parser, Python runner, practice-file format
   board.ts          the panda's board panel
   editorPanda.ts    the panda in the editor: follow, sleep, think, walk, speak
@@ -111,6 +120,7 @@ src/
   providers/        Claude (Anthropic SDK) and Ollama
 lessons/            the 29 lessons, as Markdown
 test/solutions/     reference solutions for every exercise (tests only)
+test/fixtures/repos small sample projects (Flask, Express, React, Go, Python CLI) the repo tour is tested on
 media/              sidebar chat, the board, scene player, algorithm steps
 media/panda/        panda poses (sit, walk, think, talk, cheer, sleep)
 test/               node:test suites

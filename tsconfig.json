@@ -9,5 +9,6 @@
     "noEmit": true,
     "types": ["node", "vscode"]
   },
-  "include": ["src", "test"]
+  "include": ["src", "test"],
+  "exclude": ["test/fixtures"]
 }

@@ -1,0 +1,7 @@
+[project]
+name = "wordcount"
+description = "Counts the words in text files."
+dependencies = ["click>=8", "rich[jupyter]>=13"]
+
+[project.scripts]
+wordcount = "wordcount.cli:main"

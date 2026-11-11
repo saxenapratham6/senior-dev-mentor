@@ -338,3 +338,50 @@ th { background: var(--vscode-editor-background); font-weight: 600; }
 
 .lesson-footer { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between; margin-top: 18px; padding-top: 12px; border-top: 1px solid var(--border); }
 .lesson-footer .codicon.after { margin: 0 0 0 5px; }
+
+/* ------------------------------------------------------------ the repo map and tour */
+
+.repo-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 4px 0 10px; }
+.segmented { display: inline-flex; border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+.segmented button { border: 0; border-radius: 0; color: var(--vscode-foreground); background: transparent; }
+.segmented button.on { color: var(--vscode-button-foreground); background: var(--vscode-button-background); }
+.segmented button:hover:not(.on) { background: var(--vscode-list-hoverBackground); }
+#repoChips { margin: 0 0 10px; display: flex; flex-wrap: wrap; gap: 6px; }
+#repoChips .tag { cursor: help; }
+.repo-body { display: flex; flex-direction: column; gap: 10px; }
+.tour-bar {
+  position: sticky; top: 0; z-index: 5;
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px;
+  margin: 0 0 10px; padding: 6px 10px;
+  border: 1px solid color-mix(in srgb, var(--vscode-textLink-foreground) 60%, transparent);
+  border-radius: var(--radius);
+  background: var(--vscode-editor-background);
+}
+.tour-bar .row { display: inline-flex; gap: 6px; }
+ul.files, .tour-outline ol, ul.skip, ul.quiz-list { list-style: none; margin: 0; padding: 0; }
+ul.files li { margin: 2px 0 6px; }
+.file-row, .stop {
+  display: block; width: 100%; text-align: left; padding: 3px 6px; margin: 0;
+  color: var(--vscode-foreground); background: transparent; border: 0; border-radius: 4px; font: inherit; line-height: 1.45;
+}
+.file-row:hover:not(:disabled), .stop:hover:not(:disabled) { background: var(--vscode-list-hoverBackground); }
+.file-row code { font-weight: 600; }
+.reasons { display: flex; flex-wrap: wrap; gap: 4px; margin: 2px 0 0 6px; }
+.reason { font-size: 0.85em; color: var(--muted); border: 1px solid var(--border); border-radius: 9px; padding: 0 7px; }
+.chapter + .chapter { margin-top: 8px; }
+.chapter-title { font-weight: 600; margin: 2px 0 2px 6px; }
+.stop { display: flex; align-items: baseline; gap: 6px; }
+.stop-n {
+  flex: none; min-width: 1.6em; text-align: center; font-size: 0.85em; font-variant-numeric: tabular-nums;
+  border-radius: 9px; background: var(--vscode-badge-background); color: var(--vscode-badge-foreground);
+}
+.stop.here { background: var(--vscode-list-activeSelectionBackground); color: var(--vscode-list-activeSelectionForeground); }
+.stop.here .muted { color: inherit; opacity: 0.8; }
+.stop.here .stop-n { background: var(--vscode-button-background); color: var(--vscode-button-foreground); }
+details.fold > summary { display: flex; align-items: center; gap: 6px; cursor: pointer; font-weight: 600; list-style: none; }
+details.fold > summary::-webkit-details-marker { display: none; }
+details.fold[open] > summary { margin-bottom: 8px; }
+ul.skip li { margin: 6px 0; line-height: 1.45; }
+ul.quiz-list li { margin: 6px 0; }
+ul.quiz-list summary { cursor: pointer; }
+ul.quiz-list p { margin: 4px 0 0 16px; color: var(--muted); }

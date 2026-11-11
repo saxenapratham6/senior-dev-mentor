@@ -1,8 +1,8 @@
 {
   "name": "senior-dev-mentor",
   "displayName": "Senior Dev Mentor",
-  "description": "An open-source AI mentor that teaches you to code instead of coding for you. A panda lives in your editor and walks to the lines worth a look, draws any data structure on its board, and wraps up what you learned.",
-  "version": "0.7.1",
+  "description": "An open-source AI mentor that teaches you to code instead of coding for you. A panda lives in your editor, walks you through any repo file by file, points at the lines worth a look, draws data structures on its board, and wraps up what you learned.",
+  "version": "0.8.0",
   "publisher": "senior-dev-mentor",
   "license": "MIT",
   "repository": {
@@ -23,7 +23,9 @@
     "tutor",
     "learning",
     "algorithms",
-    "uiuc"
+    "uiuc",
+    "onboarding",
+    "codebase"
   ],
   "activationEvents": [
     "onStartupFinished"
@@ -80,6 +82,17 @@
         "category": "Mentor"
       },
       {
+        "command": "seniorDevMentor.tour",
+        "title": "Tour This Repository",
+        "category": "Mentor",
+        "icon": "$(compass)"
+      },
+      {
+        "command": "seniorDevMentor.explain",
+        "title": "Explain with the Mentor",
+        "category": "Mentor"
+      },
+      {
         "command": "seniorDevMentor.roadmap",
         "title": "Open My Roadmap (Python to interview-ready)",
         "category": "Mentor"
@@ -118,6 +131,11 @@
         "command": "seniorDevMentor.pandaAsk",
         "title": "Panda: Explain This Line More",
         "category": "Mentor"
+      },
+      {
+        "command": "seniorDevMentor.pandaBack",
+        "title": "Panda: Walk Back to the Previous Stop",
+        "category": "Mentor"
       }
     ],
     "menus": {
@@ -137,12 +155,27 @@
         {
           "command": "seniorDevMentor.showMe",
           "group": "seniorDevMentor@4"
+        },
+        {
+          "command": "seniorDevMentor.explain",
+          "group": "seniorDevMentor@5"
         }
       ],
       "commandPalette": [
         {
           "command": "seniorDevMentor.pandaAsk",
           "when": "false"
+        },
+        {
+          "command": "seniorDevMentor.pandaBack",
+          "when": "false"
+        }
+      ],
+      "explorer/context": [
+        {
+          "command": "seniorDevMentor.explain",
+          "when": "resourceScheme == file",
+          "group": "seniorDevMentor@1"
         }
       ]
     },
@@ -213,6 +246,35 @@
           "type": "string",
           "default": "",
           "description": "Python used to run lesson examples and check exercises. Leave empty to use python3 (python on Windows)."
+        },
+        "seniorDevMentor.tourLevel": {
+          "type": "string",
+          "enum": [
+            "new",
+            "experienced"
+          ],
+          "enumDescriptions": [
+            "Short stops, and every term explained the first time it comes up.",
+            "Fewer, denser stops that skip the basics."
+          ],
+          "default": "new",
+          "description": "How the repo tour talks to you. You can also switch it on the panda's board."
+        },
+        "seniorDevMentor.offerTourOnOpen": {
+          "type": "boolean",
+          "default": true,
+          "description": "In a new project with 20 or more code files, the panda offers a tour once."
+        },
+        "seniorDevMentor.tourMaxFiles": {
+          "type": "number",
+          "default": 20000,
+          "minimum": 100,
+          "description": "The repo tour stops listing files after this many."
+        },
+        "seniorDevMentor.useGitHistory": {
+          "type": "boolean",
+          "default": true,
+          "description": "The repo tour ranks recently changed files a little higher, using `git log` (read only)."
         }
       }
     }

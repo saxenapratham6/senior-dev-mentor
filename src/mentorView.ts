@@ -13,7 +13,7 @@ import { EditorPanda, PandaWhereabouts } from "./editorPanda";
 import { PandaBoard } from "./board";
 import { PROBLEM_MILESTONES, RoadmapState, emptyRoadmapState, toggleItem, addSolved, toggleLadder, markPassed, roadmapProgress, isRoadmapLink, leetcodeUrl } from "./roadmap";
 import { Classroom } from "./classroom";
-import type { LessonAction } from "./board";
+import type { LessonAction, RepoAction } from "./board";
 import { UNITS } from "./lessons/types";
 import {
   SessionLog,
@@ -39,6 +39,7 @@ type FromWebview =
   | { type: "showMe"; text: string }
   | { type: "wrapUp" }
   | { type: "roadmap" }
+  | { type: "tour" }
   | { type: "stop" }
   | { type: "newProblem" }
   | { type: "setApiKey" }
@@ -77,6 +78,8 @@ export class MentorViewProvider implements vscode.WebviewViewProvider {
   private openLessonId?: string;
   readonly board: PandaBoard;
   readonly classroom: Classroom;
+  /** Set by extension.ts: the repo tour handles the board's map buttons. */
+  repoActions?: (action: RepoAction) => void;
 
   constructor(
     private readonly ctx: vscode.ExtensionContext,
@@ -96,6 +99,7 @@ export class MentorViewProvider implements vscode.WebviewViewProvider {
       onRoadmapSolved: (difficulty, delta) => void this.updateRoadmap((st) => addSolved(st, difficulty, delta)),
       onGuideMe: (id) => void this.guideMe(id),
       onLesson: (action) => void this.onLesson(action),
+      onRepo: (action) => this.repoActions?.(action),
       onOpenUrl: (url) => {
         if (isRoadmapLink(url)) void vscode.env.openExternal(vscode.Uri.parse(url));
       },
@@ -183,6 +187,9 @@ export class MentorViewProvider implements vscode.WebviewViewProvider {
         break;
       case "roadmap":
         this.showRoadmap();
+        break;
+      case "tour":
+        await vscode.commands.executeCommand("seniorDevMentor.tour");
         break;
       case "stop":
         this.abort?.abort();
@@ -632,6 +639,7 @@ export class MentorViewProvider implements vscode.WebviewViewProvider {
   <div class="row">
     <span id="provider" class="muted small"></span>
     <span class="row">
+      <button type="button" id="tour" class="icon-btn" title="Tour this repo: the panda shows you around the code">${icon("compass")}</button>
       <button type="button" id="roadmap" class="icon-btn" title="My roadmap: Python mastery to interview-ready">${icon("map")}</button>
       <button type="button" id="wrapUp" class="icon-btn" title="Wrap up: the panda summarizes this session">${icon("notebook")}</button>
       <button type="button" id="newProblem" class="icon-btn" title="New problem: reset hints and the chat">${icon("add")}</button>

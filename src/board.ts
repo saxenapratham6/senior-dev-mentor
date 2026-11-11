@@ -30,7 +30,59 @@ export type BoardMessage =
     }
   | { type: "runResult"; exampleId: string; result: RunResult & { saved?: boolean } }
   | { type: "checkResult"; exerciseId: string; result: CheckResult }
-  | { type: "lessonState"; done: boolean; passed: string[]; ladder: string[] };
+  | { type: "lessonState"; done: boolean; passed: string[]; ladder: string[] }
+  | { type: "repo"; repo: RepoView; tour: TourView; level: "new" | "experienced"; at: number; resumeAt?: number }
+  | { type: "tourAt"; stop: number };
+
+export interface RepoFileRow {
+  path: string;
+  role?: string;
+  reasons: string[];
+  score: number;
+  line: number;
+}
+
+/** The repo map, as the board draws it. */
+export interface RepoView {
+  name: string;
+  description?: string;
+  files: number;
+  read: number;
+  secrets: number;
+  lines: number;
+  truncated: boolean;
+  languages: { name: string; share: number }[];
+  frameworks: { name: string; what: string }[];
+  start: RepoFileRow[];
+  core: RepoFileRow[];
+  supporting: RepoFileRow[];
+  supportingMore: number;
+  skip: { why: string; count: number; examples: string[] }[];
+  folders: { path: string; role: string; files: number }[];
+}
+
+export interface TourView {
+  title: string;
+  kind: "repo" | "folder" | "file";
+  message?: string;
+  chapters: { title: string; why: string; stops: { index: number; title: string; path: string; line: number; bubble: string }[] }[];
+  quiz: { q: string; a: string }[];
+}
+
+/** Everything the repo map can ask for. */
+export type RepoAction =
+  | { type: "tourStart" }
+  | { type: "tourResume" }
+  | { type: "tourJump"; stop: number }
+  | { type: "tourNext" }
+  | { type: "tourBack" }
+  | { type: "tourEnd" }
+  | { type: "tourLevel"; level: "new" | "experienced" }
+  | { type: "explainPath"; path: string }
+  | { type: "openFile"; path: string; line?: number }
+  | { type: "repoMap" };
+
+const REPO_ACTIONS = new Set(["tourStart", "tourResume", "tourJump", "tourNext", "tourBack", "tourEnd", "tourLevel", "explainPath", "openFile", "repoMap"]);
 
 /** Everything the lesson view can ask for. */
 export type LessonAction =
@@ -57,7 +109,8 @@ type FromBoard =
   | { type: "roadmapSolved"; difficulty: "easy" | "medium" | "hard"; delta: 1 | -1 }
   | { type: "openUrl"; url: string }
   | { type: "guideMe"; id: string }
-  | LessonAction;
+  | LessonAction
+  | RepoAction;
 
 export interface BoardHooks {
   onOpen(): void;
@@ -71,6 +124,7 @@ export interface BoardHooks {
   onOpenUrl(url: string): void;
   onGuideMe(id: string): void;
   onLesson(action: LessonAction): void;
+  onRepo(action: RepoAction): void;
 }
 
 export class PandaBoard implements vscode.Disposable {
@@ -94,6 +148,11 @@ export class PandaBoard implements vscode.Disposable {
     else this.queue.push(msg);
   }
 
+  /** Send to the board only if it's open, without bringing it to the front. */
+  update(msg: BoardMessage): void {
+    if (this.panel && this.ready) void this.panel.webview.postMessage(msg);
+  }
+
   dispose(): void {
     this.panel?.dispose();
   }
@@ -111,6 +170,7 @@ export class PandaBoard implements vscode.Disposable {
     this.panel.webview.html = boardHtml(this.panel.webview, media);
     this.panel.webview.onDidReceiveMessage((m: FromBoard) => {
       if (LESSON_ACTIONS.has(m.type)) return this.hooks.onLesson(m as LessonAction);
+      if (REPO_ACTIONS.has(m.type)) return this.hooks.onRepo(m as RepoAction);
       switch (m.type) {
         case "ready":
           this.ready = true;
@@ -265,6 +325,32 @@ function boardHtml(webview: vscode.Webview, media: vscode.Uri): string {
       <button id="lessonAsk" class="secondary" title="Talk this lesson through with the mentor">${icon("mortar-board")}Ask the mentor</button>
       <button id="lessonNext" class="secondary" hidden></button>
     </div>
+  </section>
+
+  <section id="repoView" class="view" hidden>
+    <div class="intro">
+      <img id="repoPanda" class="panda big" alt="" src="${uri("panda/talk.svg")}">
+      <div class="bubble static"><p id="repoHeadline"></p><p id="repoMeta" class="muted small"></p></div>
+    </div>
+    <div class="repo-actions">
+      <button id="tourStart">${icon("play")}Start the tour</button>
+      <button id="tourResume" class="secondary" hidden>${icon("debug-continue")}<span></span></button>
+      <span class="segmented" role="radiogroup" aria-label="How familiar are you?">
+        <button data-level="new" role="radio" title="Short stops, every term explained">New to this</button>
+        <button data-level="experienced" role="radio" title="Fewer, denser stops">Experienced</button>
+      </span>
+      <button id="repoMapBack" class="link" hidden>${icon("map")}Whole repo</button>
+    </div>
+    <p id="repoChips" class="tags"></p>
+    <div id="tourBar" class="tour-bar" hidden>
+      <span id="tourWhere"></span>
+      <span class="row">
+        <button id="tourBack" class="secondary" title="Previous stop">${icon("arrow-left")}</button>
+        <button id="tourNext" title="Next stop">${icon("arrow-right")}Next</button>
+        <button id="tourEnd" class="secondary" title="End the tour">${icon("close")}</button>
+      </span>
+    </div>
+    <div id="repoBody" class="repo-body"></div>
   </section>
 
   <section id="summaryView" class="view" hidden>

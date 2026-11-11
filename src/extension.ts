@@ -6,16 +6,23 @@ import { findNudges } from "./heuristics";
 import { EditorPanda, plain } from "./editorPanda";
 import type { PandaBoard } from "./board";
 import type { Classroom } from "./classroom";
+import { RepoGuide } from "./repoGuide";
 
 const NUDGE_LANGUAGES = new Set(["python", "javascript", "typescript", "java", "c", "cpp", "csharp", "go", "rust"]);
 
 /** Returned so the integration tests can reach the panda; not a public API. */
-export function activate(context: vscode.ExtensionContext): { panda: EditorPanda; board: PandaBoard; classroom: Classroom } {
+export function activate(context: vscode.ExtensionContext): { panda: EditorPanda; board: PandaBoard; classroom: Classroom; guide: RepoGuide } {
   const progress = new ProgressStore(context.globalState);
   let mentor: MentorViewProvider | undefined;
-  const panda = new EditorPanda(context.extensionUri, (where) => mentor?.pandaMoved(where));
+  let guide: RepoGuide | undefined;
+  const panda = new EditorPanda(context.extensionUri, (where) => {
+    mentor?.pandaMoved(where);
+    guide?.pandaMoved(where);
+  });
   mentor = new MentorViewProvider(context, progress, panda);
-  context.subscriptions.push(panda);
+  guide = new RepoGuide(context, panda, mentor.board);
+  mentor.repoActions = (a) => void guide.onAction(a);
+  context.subscriptions.push(panda, guide);
 
   context.subscriptions.push(
     vscode.window.registerWebviewViewProvider("seniorDevMentor.view", mentor, {
@@ -30,7 +37,10 @@ export function activate(context: vscode.ExtensionContext): { panda: EditorPanda
     vscode.commands.registerCommand("seniorDevMentor.wrapUp", () => mentor.wrapUp()),
     vscode.commands.registerCommand("seniorDevMentor.roadmap", () => mentor.showRoadmap()),
     vscode.commands.registerCommand("seniorDevMentor.openLesson", (id?: string) => (id ? mentor.showLesson(id) : mentor.showRoadmap())),
+    vscode.commands.registerCommand("seniorDevMentor.tour", () => guide.open()),
+    vscode.commands.registerCommand("seniorDevMentor.explain", (uri?: vscode.Uri) => guide.explain(uri)),
     vscode.commands.registerCommand("seniorDevMentor.pandaNext", () => panda.next()),
+    vscode.commands.registerCommand("seniorDevMentor.pandaBack", () => panda.back()),
     vscode.commands.registerCommand("seniorDevMentor.pandaDismiss", () => panda.dismiss()),
     vscode.commands.registerCommand("seniorDevMentor.pandaAsk", () => {
       const stop = panda.current;
@@ -77,7 +87,7 @@ export function activate(context: vscode.ExtensionContext): { panda: EditorPanda
       })();
     }),
   );
-  return { panda, board: mentor.board, classroom: mentor.classroom };
+  return { panda, board: mentor.board, classroom: mentor.classroom, guide };
 }
 
 export function deactivate(): void {}

@@ -19,7 +19,7 @@
 
   function show(view) {
     const changed = $(view).hidden;
-    for (const v of ["sceneView", "examplesView", "loadingView", "summaryView", "roadmapView", "lessonView"]) $(v).hidden = v !== view;
+    for (const v of ["sceneView", "examplesView", "loadingView", "summaryView", "roadmapView", "lessonView", "repoView"]) $(v).hidden = v !== view;
     if (changed) window.scrollTo(0, 0);
     if (view !== "sceneView") $("counter").textContent = "";
   }
@@ -445,6 +445,112 @@
     if (open) vscode.postMessage({ type: "openLesson", id: open.dataset.lesson });
   });
 
+  // ------------------------------------------------------------ the repo map and tour
+
+  let repoMsg = null;
+
+  function fileRow(f, withReasons) {
+    const reasons = withReasons && f.reasons.length ? `<span class="reasons">${f.reasons.map((r) => `<span class="reason">${esc(r)}</span>`).join("")}</span>` : "";
+    return `<li><button class="file-row" data-explain="${esc(f.path)}" title="Have the panda explain ${esc(f.path)}"><code>${esc(f.path)}</code>${f.role ? `<span class="muted"> ${rich(f.role)}</span>` : ""}</button>${reasons}</li>`;
+  }
+
+  function renderRepo(m) {
+    repoMsg = m;
+    const { repo, tour } = m;
+    const isRepo = tour.kind === "repo";
+    $("title").textContent = isRepo ? `Tour of ${repo.name}` : tour.title;
+    $("repoHeadline").innerHTML = isRepo
+      ? `This is <b>${esc(repo.name)}</b>${repo.description ? `: ${rich(repo.description)}` : "."}`
+      : tour.message
+        ? rich(tour.message)
+        : `${rich(tour.title)}. Press <b>Walk me through it</b> and I'll go stop by stop.`;
+    const meta = [
+      plural(repo.files, "file", "files") + (repo.truncated ? " (I stopped counting there)" : ""),
+      repo.lines && `${repo.lines.toLocaleString()} lines of code`,
+      repo.languages.length && repo.languages.map((l) => `${l.name} ${l.share}%`).join(", "),
+      repo.secrets && `I didn't open ${plural(repo.secrets, "file", "files")} that may hold passwords or keys`,
+    ].filter(Boolean);
+    $("repoMeta").textContent = meta.join(" · ");
+    $("repoChips").innerHTML = repo.frameworks.map((f) => `<span class="tag" title="${esc(f.what.replace(/`/g, ""))}">${esc(f.name)}</span>`).join("");
+    const stops = tour.chapters.reduce((n, c) => n + c.stops.length, 0);
+    $("tourStart").innerHTML = `<i class="codicon codicon-play"></i>${isRepo ? "Start the tour" : "Walk me through it"}`;
+    $("tourStart").disabled = !stops;
+    $("repoMapBack").hidden = isRepo;
+    const resume = $("tourResume");
+    resume.hidden = m.resumeAt === undefined;
+    if (m.resumeAt !== undefined) resume.querySelector("span").textContent = `Resume at stop ${m.resumeAt + 1}`;
+    document.querySelectorAll("[data-level]").forEach((b) => {
+      b.setAttribute("aria-checked", String(b.dataset.level === m.level));
+      b.classList.toggle("on", b.dataset.level === m.level);
+    });
+
+    const outline = stops
+      ? `<section class="card tour-outline"><h2><i class="codicon codicon-compass"></i>${isRepo ? "The tour" : "Stops"} · ${plural(stops, "stop", "stops")}</h2>${tour.chapters
+          .map(
+            (c) =>
+              `<div class="chapter"><div class="chapter-title">${esc(c.title)}${c.why ? `<span class="muted small"> ${rich(c.why)}</span>` : ""}</div><ol>${c.stops
+                .map((st) => `<li><button class="stop" data-stop="${st.index}" title="${esc(st.bubble)}"><span class="stop-n">${st.index + 1}</span>${esc(st.title)}<span class="muted small"> ${esc(st.path)}:${st.line + 1}</span></button></li>`)
+                .join("")}</ol></div>`,
+          )
+          .join("")}</section>`
+      : "";
+    const card = (title, iconName, rows, withReasons) =>
+      rows.length ? `<section class="card"><h2><i class="codicon codicon-${iconName}"></i>${esc(title)}</h2><ul class="files">${rows.map((f) => fileRow(f, withReasons)).join("")}</ul></section>` : "";
+    const folders = repo.folders.length
+      ? `<section class="card"><h2><i class="codicon codicon-folder"></i>Folders</h2><ul class="files">${repo.folders
+          .map((f) => `<li><button class="file-row" data-explain="${esc(f.path)}" title="Have the panda explain ${esc(f.path)}/"><code>${esc(f.path)}/</code><span class="muted"> ${rich(f.role)} · ${plural(f.files, "file", "files")}</span></button></li>`)
+          .join("")}</ul></section>`
+      : "";
+    const supporting = repo.supporting.length
+      ? `<details class="card fold"><summary><i class="codicon codicon-library"></i>Supporting files (${repo.supporting.length + repo.supportingMore})</summary><ul class="files">${repo.supporting.map((f) => fileRow(f, true)).join("")}</ul>${repo.supportingMore ? `<p class="muted small">and ${repo.supportingMore} more</p>` : ""}</details>`
+      : "";
+    const skipCount = repo.skip.reduce((n, g) => n + g.count, 0);
+    const skip = skipCount
+      ? `<details class="card fold"><summary><i class="codicon codicon-eye-closed"></i>Safe to skip for now (${skipCount})</summary><ul class="skip">${repo.skip
+          .map((g) => `<li><b>${g.count}</b> ${rich(g.why)}<div class="muted small">${g.examples.map((e) => `<code>${esc(e)}</code>`).join(" ")}${g.count > g.examples.length ? " …" : ""}</div></li>`)
+          .join("")}</ul></details>`
+      : "";
+    const quiz = tour.quiz.length
+      ? `<details class="card fold"><summary><i class="codicon codicon-question"></i>Check yourself after the tour</summary><ul class="quiz-list">${tour.quiz
+          .map((q) => `<li><details><summary>${rich(q.q)}</summary><p>${rich(q.a)}</p></details></li>`)
+          .join("")}</ul></details>`
+      : "";
+    $("repoBody").innerHTML =
+      (tour.message && !isRepo ? "" : outline) +
+      (isRepo ? card("Start here", "debug-start", repo.start, true) + card("The files that do the work", "flame", repo.core, true) + folders + supporting + skip + quiz : "");
+    show("repoView");
+    tourAt(m.at);
+  }
+
+  function tourAt(stop) {
+    if (!repoMsg) return;
+    repoMsg.at = stop;
+    document.querySelectorAll("#repoBody .stop").forEach((b) => b.classList.toggle("here", Number(b.dataset.stop) === stop));
+    const all = repoMsg.tour.chapters.flatMap((c) => c.stops.map((st) => ({ ...st, chapter: c.title })));
+    const cur = all[stop];
+    $("tourBar").hidden = !cur;
+    $("repoPanda").src = `${sprites}/${cur ? "point" : "talk"}.svg`;
+    if (!cur) return;
+    $("tourWhere").innerHTML = `<b>Stop ${stop + 1} of ${all.length}</b> · ${esc(cur.chapter)} · <code>${esc(cur.path)}</code>`;
+    $("tourBack").disabled = stop === 0;
+    $("tourNext").innerHTML = stop + 1 < all.length ? `<i class="codicon codicon-arrow-right"></i>Next` : `<i class="codicon codicon-check"></i>Finish`;
+    document.querySelector("#repoBody .stop.here")?.scrollIntoView({ block: "nearest" });
+  }
+
+  $("tourStart").addEventListener("click", () => vscode.postMessage({ type: "tourStart" }));
+  $("tourResume").addEventListener("click", () => vscode.postMessage({ type: "tourResume" }));
+  $("tourNext").addEventListener("click", () => vscode.postMessage({ type: "tourNext" }));
+  $("tourBack").addEventListener("click", () => vscode.postMessage({ type: "tourBack" }));
+  $("tourEnd").addEventListener("click", () => vscode.postMessage({ type: "tourEnd" }));
+  $("repoMapBack").addEventListener("click", () => vscode.postMessage({ type: "repoMap" }));
+  document.querySelectorAll("[data-level]").forEach((b) => b.addEventListener("click", () => vscode.postMessage({ type: "tourLevel", level: b.dataset.level })));
+  $("repoBody").addEventListener("click", (e) => {
+    const stop = e.target.closest("[data-stop]");
+    if (stop) return vscode.postMessage({ type: "tourJump", stop: Number(stop.dataset.stop) });
+    const explain = e.target.closest("[data-explain]");
+    if (explain) vscode.postMessage({ type: "explainPath", path: explain.dataset.explain });
+  });
+
   // ------------------------------------------------------------ messages from the extension
 
   window.addEventListener("message", (event) => {
@@ -471,6 +577,12 @@
         break;
       case "lesson":
         renderLesson(m);
+        break;
+      case "repo":
+        renderRepo(m);
+        break;
+      case "tourAt":
+        tourAt(m.stop);
         break;
       case "lessonState":
         lessonState = { done: m.done, passed: m.passed, ladder: m.ladder };

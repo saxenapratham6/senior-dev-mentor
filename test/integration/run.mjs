@@ -2,7 +2,7 @@
 // /Applications, or the one VSCODE_PATH points to. It never downloads VS Code.
 // Usage: npm run test:vscode
 import { runTests } from "@vscode/test-electron";
-import { existsSync, mkdtempSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -14,11 +14,14 @@ if (!existsSync(vscodePath)) {
   process.exit(1);
 }
 const scratch = mkdtempSync(path.join(process.env.TMPDIR || tmpdir(), "mentor-it-"));
+// The workspace is its own folder, so the repo tour doesn't read VS Code's profile in "user".
+const workspace = path.join(scratch, "ws");
+mkdirSync(workspace);
 
 await runTests({
   vscodeExecutablePath: vscodePath,
   extensionDevelopmentPath: root,
   extensionTestsPath: path.join(root, "test/integration", process.env.MENTOR_IT_SUITE || "suite.cjs"),
-  launchArgs: ["--disable-extensions", "--user-data-dir", path.join(scratch, "user"), scratch],
-  extensionTestsEnv: { MENTOR_IT_DIR: scratch, LOOK_HOLD: process.env.LOOK_HOLD ?? "", LOOK_BOARD_HOLD: process.env.LOOK_BOARD_HOLD ?? "" },
+  launchArgs: ["--disable-extensions", "--user-data-dir", path.join(scratch, "user"), workspace],
+  extensionTestsEnv: { MENTOR_IT_DIR: workspace, MENTOR_FIXTURES: path.join(root, "test/fixtures/repos"), LOOK_HOLD: process.env.LOOK_HOLD ?? "", LOOK_BOARD_HOLD: process.env.LOOK_BOARD_HOLD ?? "" },
 });
